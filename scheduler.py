@@ -1,30 +1,48 @@
+from apscheduler.schedulers.background import BackgroundScheduler
 
-        from apscheduler.schedulers.background import BackgroundScheduler
-        from database import get_monitors, update_price
-        from services.scraper import scrape_prices
+from database import (
+    get_monitors,
+    update_price
+)
 
-        scheduler = BackgroundScheduler()
+from services.scraper import scrape_prices
 
-        async def check_monitor(bot, monitor):
+scheduler = BackgroundScheduler()
 
-            monitor_id, chat_id, source, destination, travel_date, threshold, frequency, last_price = monitor
 
-            buses = scrape_prices(
-                source,
-                destination,
-                travel_date
-            )
+async def check_monitor(bot, monitor):
 
-            if not buses:
-                return
+    (
+        monitor_id,
+        chat_id,
+        source,
+        destination,
+        travel_date,
+        threshold,
+        frequency,
+        last_price
+    ) = monitor
 
-            cheapest = min([x["price"] for x in buses])
+    try:
 
-            if cheapest < last_price:
+        buses = scrape_prices(
+            source,
+            destination,
+            travel_date
+        )
 
-                await bot.send_message(
-                    chat_id=chat_id,
-                    text=f'''
+        if not buses:
+            return
+
+        cheapest = min(
+            [x["price"] for x in buses]
+        )
+
+        if cheapest < last_price:
+
+            await bot.send_message(
+                chat_id=chat_id,
+                text=f"""
 🚌 Fare Dropped
 
 Route:
@@ -35,24 +53,59 @@ Old Price:
 
 New Price:
 ₹{cheapest}
-'''
-                )
+"""
+            )
 
-                update_price(monitor_id, cheapest)
+            update_price(
+                monitor_id,
+                cheapest
+            )
 
-        def start_scheduler(bot):
+        elif cheapest <= threshold:
 
-            monitors = get_monitors()
+            await bot.send_message(
+                chat_id=chat_id,
+                text=f"""
+🔥 Fare Alert
 
-            for monitor in monitors:
+Threshold Reached
 
-                scheduler.add_job(
-                    check_monitor,
-                    "interval",
-                    minutes=monitor[6],
-                    args=[bot, monitor],
-                    id=str(monitor[0]),
-                    replace_existing=True
-                )
+Route:
+{source} → {destination}
 
-            scheduler.start()
+Current Fare:
+₹{cheapest}
+
+Threshold:
+₹{threshold}
+"""
+            )
+
+    except Exception as e:
+
+        print(
+            "Scheduler Error:",
+            str(e)
+        )
+
+
+def start_scheduler(bot):
+
+    monitors = get_monitors()
+
+    for monitor in monitors:
+
+        monitor_id = monitor[0]
+
+        frequency = monitor[6]
+
+        scheduler.add_job(
+            check_monitor,
+            "interval",
+            minutes=frequency,
+            args=[bot, monitor],
+            id=str(monitor_id),
+            replace_existing=True
+        )
+
+    scheduler.start()
