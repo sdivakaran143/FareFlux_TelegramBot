@@ -8,7 +8,6 @@ from telegram.ext import ContextTypes
 
 from services.location_service import search_place
 from services.scraper import scrape_prices
-
 from database import add_monitor
 
 USER_STATE = {}
@@ -16,9 +15,13 @@ USER_STATE = {}
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    USER_STATE[update.effective_chat.id] = {
+    chat_id = update.effective_chat.id
+
+    USER_STATE[chat_id] = {
         "step": "source"
     }
+
+    print("START:", USER_STATE)
 
     await update.message.reply_text(
         "🚌 Enter Source Location"
@@ -29,16 +32,33 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = update.effective_chat.id
 
-    if chat_id not in USER_STATE:
-        return
-
-    state = USER_STATE[chat_id]
-
     text = update.message.text
 
-    if state["step"] == "source":
+    print("MESSAGE:", text)
+
+    if chat_id not in USER_STATE:
+
+        USER_STATE[chat_id] = {
+            "step": "source"
+        }
+
+    step = USER_STATE[chat_id]["step"]
+
+    print("STEP:", step)
+
+    if step == "source":
 
         results = search_place(text)
+
+        print("SOURCE RESULTS:", results)
+
+        if not results:
+
+            await update.message.reply_text(
+                "❌ No locations found"
+            )
+
+            return
 
         keyboard = []
 
@@ -56,9 +76,19 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-    elif state["step"] == "destination":
+    elif step == "destination":
 
         results = search_place(text)
+
+        print("DEST RESULTS:", results)
+
+        if not results:
+
+            await update.message.reply_text(
+                "❌ No destinations found"
+            )
+
+            return
 
         keyboard = []
 
@@ -86,6 +116,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = query.message.chat_id
 
     data = query.data
+
+    print("CALLBACK:", data)
 
     if data.startswith("source|"):
 
@@ -173,6 +205,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💰 Fare:
 ₹{price}
 
-🔔 Monitoring every minute
+🔔 Monitoring started
 """
         )
