@@ -27,6 +27,16 @@ from storage import (
 USER_STATE = {}
 
 
+CITY_CODES = {
+
+    "karapakkam": 89782,
+
+    "paramathi velur": 1042,
+
+    "paramathivelur": 1042
+}
+
+
 def format_time(value):
 
     try:
@@ -37,26 +47,25 @@ def format_time(value):
 
             parts = value.split(":")
 
-            if len(parts) >= 2:
+            hour = int(parts[0])
 
-                hour = int(parts[0])
-                minute = int(parts[1])
+            minute = int(parts[1])
 
-                suffix = "AM"
+            suffix = "AM"
 
-                if hour >= 12:
-                    suffix = "PM"
+            if hour >= 12:
+                suffix = "PM"
 
-                if hour > 12:
-                    hour -= 12
+            if hour > 12:
+                hour -= 12
 
-                if hour == 0:
-                    hour = 12
+            if hour == 0:
+                hour = 12
 
-                return (
-                    f"{hour:02d}:{minute:02d} "
-                    f"{suffix}"
-                )
+            return (
+                f"{hour:02d}:{minute:02d} "
+                f"{suffix}"
+            )
 
         return value
 
@@ -123,12 +132,18 @@ async def message_handler(
 
     text = update.message.text.strip()
 
+    text_lower = text.lower().strip()
+
+    print("\nMESSAGE:", text)
+
     if chat_id not in USER_STATE:
         return
 
     step = USER_STATE[chat_id].get(
         "step"
     )
+
+    print("STEP:", step)
 
     if step == "monitor_name":
 
@@ -141,10 +156,19 @@ async def message_handler(
         ] = "source"
 
         await update.message.reply_text(
-            "📍 Enter Source"
+            "📍 Enter Source City"
         )
 
     elif step == "source":
+
+        if text_lower not in CITY_CODES:
+
+            await update.message.reply_text(
+
+                "❌ Source city code not found"
+            )
+
+            return
 
         USER_STATE[chat_id][
             "source_name"
@@ -152,17 +176,26 @@ async def message_handler(
 
         USER_STATE[chat_id][
             "source_id"
-        ] = 89782
+        ] = CITY_CODES[text_lower]
 
         USER_STATE[chat_id][
             "step"
         ] = "destination"
 
         await update.message.reply_text(
-            "📍 Enter Destination"
+            "📍 Enter Destination City"
         )
 
     elif step == "destination":
+
+        if text_lower not in CITY_CODES:
+
+            await update.message.reply_text(
+
+                "❌ Destination city code not found"
+            )
+
+            return
 
         USER_STATE[chat_id][
             "destination_name"
@@ -170,7 +203,7 @@ async def message_handler(
 
         USER_STATE[chat_id][
             "destination_id"
-        ] = 1042
+        ] = CITY_CODES[text_lower]
 
         USER_STATE[chat_id][
             "step"
@@ -195,7 +228,7 @@ async def message_handler(
 
         await update.message.reply_text(
 
-            "📅 Select Date",
+            "📅 Select Travel Date",
 
             reply_markup=InlineKeyboardMarkup(
                 keyboard
@@ -216,6 +249,8 @@ async def callback_handler(
 
     chat_id = update.effective_chat.id
 
+    print("\nCALLBACK:", data)
+
     if data == "create_monitor":
 
         USER_STATE[chat_id] = {
@@ -227,68 +262,57 @@ async def callback_handler(
             "📝 Enter Monitor Name"
         )
 
-    elif data == "today":
+    elif data == "view_monitors":
 
-        doj = datetime.now().strftime(
-            "%d-%b-%Y"
-        )
+        monitors = load_monitors()
 
-        USER_STATE[chat_id][
-            "date"
-        ] = doj
+        user_monitors = [
 
-        buses = scrape_prices(
+            monitor
 
-            USER_STATE[chat_id][
-                "source_id"
-            ],
+            for monitor in monitors
 
-            USER_STATE[chat_id][
-                "destination_id"
-            ],
+            if monitor["chat_id"] == chat_id
+        ]
 
-            doj
-        )
+        if not user_monitors:
 
-        USER_STATE[chat_id]["buses"] = buses
+            await query.message.reply_text(
+                "❌ No monitors found"
+            )
 
-        keyboard = []
+            return
 
-        for index, bus in enumerate(
-            buses[:25]
-        ):
+        text = "📋 Your Monitors\n\n"
 
-            keyboard.append([
+        for monitor in user_monitors:
 
-                InlineKeyboardButton(
-
-                    (
-                        f"{bus['operator']} "
-                        f"• ₹{bus['price']}"
-                    ),
-
-                    callback_data=f"bus|{index}"
-                )
-            ])
+            text += (
+                f"• {monitor['monitor_name']}\n"
+            )
 
         await query.message.reply_text(
+            text
+        )
 
-            f"🚌 {len(buses)} buses found\n"
-            f"📅 Date: {doj}",
+    elif data in ["today", "tomorrow"]:
 
-            reply_markup=InlineKeyboardMarkup(
-                keyboard
+        if data == "today":
+
+            doj = datetime.now().strftime(
+                "%d-%b-%Y"
             )
-        )
 
-    elif data == "tomorrow":
+        else:
 
-        doj = (
-            datetime.now()
-            + timedelta(days=1)
-        ).strftime(
-            "%d-%b-%Y"
-        )
+            doj = (
+                datetime.now()
+                + timedelta(days=1)
+            ).strftime(
+                "%d-%b-%Y"
+            )
+
+        print("DOJ:", doj)
 
         USER_STATE[chat_id][
             "date"
@@ -307,7 +331,17 @@ async def callback_handler(
             doj
         )
 
-        USER_STATE[chat_id]["buses"] = buses
+        USER_STATE[chat_id][
+            "buses"
+        ] = buses
+
+        if not buses:
+
+            await query.message.reply_text(
+                "❌ No buses found"
+            )
+
+            return
 
         keyboard = []
 
@@ -344,11 +378,16 @@ async def callback_handler(
             data.split("|")[1]
         )
 
-        bus = USER_STATE[chat_id]["buses"][bus_index]
+        bus = USER_STATE[
+            chat_id
+        ]["buses"][bus_index]
 
         monitor_name = (
+
             f"{USER_STATE[chat_id]['monitor_name']} "
+
             f"- "
+
             f"{bus['operator']}"
         )
 
@@ -361,13 +400,19 @@ async def callback_handler(
                 chat_id,
 
             "source_id":
-                USER_STATE[chat_id]["source_id"],
+                USER_STATE[chat_id][
+                    "source_id"
+                ],
 
             "destination_id":
-                USER_STATE[chat_id]["destination_id"],
+                USER_STATE[chat_id][
+                    "destination_id"
+                ],
 
             "date":
-                USER_STATE[chat_id]["date"],
+                USER_STATE[chat_id][
+                    "date"
+                ],
 
             "bus_operator":
                 bus["operator"]
@@ -380,15 +425,21 @@ async def callback_handler(
             f"📋 {monitor_name}\n\n"
 
             f"🚌 {bus['operator']}\n"
+
             f"💺 {bus['bus_type']}\n"
+
             f"🕒 "
             f"{format_time(bus['departure'])} "
             f"→ "
             f"{format_time(bus['arrival'])}\n"
+
             f"⌛ "
             f"{format_duration(bus['duration'])}\n"
+
             f"💰 ₹{bus['price']}\n"
+
             f"⭐ {bus['rating']}\n"
+
             f"💺 Seats: "
             f"{bus['available_seats']}"
         )
