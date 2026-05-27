@@ -1,6 +1,12 @@
+
 import requests
 
-def scrape_prices(source_id, destination_id, date):
+
+def scrape_prices(
+    source_id,
+    destination_id,
+    date
+):
 
     url = "https://www.redbus.in/rpw/api/searchResults"
 
@@ -22,10 +28,50 @@ def scrape_prices(source_id, destination_id, date):
         "isFilterApplied": "false"
     }
 
-    response = requests.get(url, params=params)
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json",
+        "Referer": "https://www.redbus.in/"
+    }
 
-    print("REQUEST:", response.url)
-    print("STATUS:", response.status_code)
-    print("RESPONSE:", response.text[:1000])
+    try:
 
-    return []
+        response = requests.get(
+            url,
+            params=params,
+            headers=headers,
+            timeout=20
+        )
+
+        print("REQUEST URL:", response.url)
+        print("STATUS:", response.status_code)
+
+        data = response.json()
+
+        inventories = (
+            data.get("data", {})
+            .get("inventories", [])
+        )
+
+        buses = []
+
+        for bus in inventories:
+
+            fares = bus.get("fareList", [])
+
+            price = min(fares) if fares else 0
+
+            buses.append({
+                "operator": bus.get("travelsName", "Unknown"),
+                "price": price,
+                "available_seats": bus.get("availableSeats", 0),
+                "booking_link": "https://www.redbus.in/"
+            })
+
+        return buses
+
+    except Exception as e:
+
+        print("SCRAPER ERROR:", str(e))
+
+        return []

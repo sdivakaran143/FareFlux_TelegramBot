@@ -1,27 +1,24 @@
+
 import sqlite3
 
-conn = sqlite3.connect(
-    "monitors.db",
-    check_same_thread=False
-)
-
+conn = sqlite3.connect("monitors.db", check_same_thread=False)
 cursor = conn.cursor()
 
-cursor.execute(
-    '''
-    CREATE TABLE IF NOT EXISTS monitors (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        chat_id TEXT,
-        monitor_name TEXT,
-        operator TEXT,
-        source TEXT,
-        destination TEXT,
-        travel_date TEXT,
-        current_price INTEGER,
-        booking_link TEXT
-    )
-    '''
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS monitors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id TEXT,
+    monitor_name TEXT,
+    operator TEXT,
+    source TEXT,
+    destination TEXT,
+    travel_date TEXT,
+    current_price INTEGER,
+    booking_link TEXT,
+    source_id INTEGER,
+    destination_id INTEGER
 )
+''')
 
 conn.commit()
 
@@ -34,7 +31,9 @@ def add_monitor(
     destination,
     travel_date,
     current_price,
-    booking_link
+    booking_link,
+    source_id,
+    destination_id
 ):
 
     cursor.execute(
@@ -47,9 +46,11 @@ def add_monitor(
             destination,
             travel_date,
             current_price,
-            booking_link
+            booking_link,
+            source_id,
+            destination_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         (
             chat_id,
@@ -59,7 +60,9 @@ def add_monitor(
             destination,
             travel_date,
             current_price,
-            booking_link
+            booking_link,
+            source_id,
+            destination_id
         )
     )
 
@@ -74,6 +77,23 @@ def get_monitors(chat_id):
     )
 
     return cursor.fetchall()
+
+
+def get_all_monitors():
+
+    cursor.execute("SELECT * FROM monitors")
+
+    return cursor.fetchall()
+
+
+def update_price(monitor_id, price):
+
+    cursor.execute(
+        "UPDATE monitors SET current_price=? WHERE id=?",
+        (price, monitor_id)
+    )
+
+    conn.commit()
 
 
 def delete_monitor(monitor_id):

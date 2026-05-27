@@ -1,3 +1,4 @@
+
 from datetime import datetime, timedelta
 
 from telegram import (
@@ -5,8 +6,6 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup
 )
-
-from telegram.ext import ContextTypes
 
 from services.city_code_service import (
     find_city_code,
@@ -42,7 +41,7 @@ async def start_command(update: Update, context):
     ]
 
     await update.message.reply_text(
-        "🚌 FareFlux Final",
+        "🚌 DIVA'S FareFlux Bot",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -57,8 +56,6 @@ async def message_handler(update: Update, context):
 
     step = USER_STATE[chat_id]["step"]
 
-    # MONITOR NAME
-
     if step == "monitor_name":
 
         USER_STATE[chat_id]["monitor_name"] = text
@@ -67,8 +64,6 @@ async def message_handler(update: Update, context):
         await update.message.reply_text(
             "📍 Enter Source"
         )
-
-    # SOURCE
 
     elif step == "source":
 
@@ -90,41 +85,23 @@ async def message_handler(update: Update, context):
             USER_STATE[chat_id]["step"] = "source_code"
 
             await update.message.reply_text(
-                "❌ Source city not found.\n\nEnter RedBus source city code."
+                "Enter source city code"
             )
-
-    # SOURCE CODE
 
     elif step == "source_code":
 
-        try:
-
-            source_code = int(text)
-
-        except:
-
-            await update.message.reply_text(
-                "❌ Invalid source city code."
-            )
-
-            return
-
-        city_name = USER_STATE[chat_id]["pending_source"]
-
         save_city_code(
-            city_name,
-            source_code
+            USER_STATE[chat_id]["pending_source"],
+            int(text)
         )
 
-        USER_STATE[chat_id]["source"] = city_name
-        USER_STATE[chat_id]["source_id"] = source_code
+        USER_STATE[chat_id]["source"] = USER_STATE[chat_id]["pending_source"]
+        USER_STATE[chat_id]["source_id"] = int(text)
         USER_STATE[chat_id]["step"] = "destination"
 
         await update.message.reply_text(
-            "✅ Source saved.\n\n📍 Enter Destination"
+            "📍 Enter Destination"
         )
-
-    # DESTINATION
 
     elif step == "destination":
 
@@ -161,34 +138,18 @@ async def message_handler(update: Update, context):
             USER_STATE[chat_id]["step"] = "destination_code"
 
             await update.message.reply_text(
-                "❌ Destination city not found.\n\nEnter RedBus destination city code."
+                "Enter destination city code"
             )
-
-    # DESTINATION CODE
 
     elif step == "destination_code":
 
-        try:
-
-            destination_code = int(text)
-
-        except:
-
-            await update.message.reply_text(
-                "❌ Invalid destination city code."
-            )
-
-            return
-
-        city_name = USER_STATE[chat_id]["pending_destination"]
-
         save_city_code(
-            city_name,
-            destination_code
+            USER_STATE[chat_id]["pending_destination"],
+            int(text)
         )
 
-        USER_STATE[chat_id]["destination"] = city_name
-        USER_STATE[chat_id]["destination_id"] = destination_code
+        USER_STATE[chat_id]["destination"] = USER_STATE[chat_id]["pending_destination"]
+        USER_STATE[chat_id]["destination_id"] = int(text)
 
         keyboard = [
             [
@@ -218,18 +179,8 @@ async def callback_handler(update: Update, context):
     if not query:
         return
 
-    try:
-
-        await query.answer()
-
-    except Exception as e:
-
-        print("CALLBACK ANSWER ERROR:", e)
-
-    chat_id = query.message.chat_id
     data = query.data
-
-    # CREATE MONITOR
+    chat_id = query.message.chat_id
 
     if data == "create_monitor":
 
@@ -240,8 +191,6 @@ async def callback_handler(update: Update, context):
         await query.message.reply_text(
             "📝 Enter Monitor Name"
         )
-
-    # MY MONITORS
 
     elif data == "my_monitors":
 
@@ -271,225 +220,129 @@ async def callback_handler(update: Update, context):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-    # DATE SELECTED
-
     elif data in ["today", "tomorrow"]:
 
-        try:
+        if data == "today":
+            travel_date = datetime.now()
+        else:
+            travel_date = datetime.now() + timedelta(days=1)
 
-            if data == "today":
+        formatted_date = travel_date.strftime("%d-%b-%Y")
 
-                travel_date = datetime.now()
+        USER_STATE[chat_id]["date"] = formatted_date
 
-            else:
+        await query.message.reply_text(
+            "🔍 Fetching buses..."
+        )
 
-                travel_date = (
-                    datetime.now() + timedelta(days=1)
-                )
+        buses = scrape_prices(
+            USER_STATE[chat_id]["source_id"],
+            USER_STATE[chat_id]["destination_id"],
+            formatted_date
+        )
 
-            USER_STATE[chat_id]["date"] = (
-                travel_date.strftime("%Y-%m-%d")
-            )
-
-            if "source_id" not in USER_STATE[chat_id]:
-
-                await query.message.reply_text(
-                    "❌ Source city missing. Restart with /start"
-                )
-
-                return
-
-            if "destination_id" not in USER_STATE[chat_id]:
-
-                await query.message.reply_text(
-                    "❌ Destination city missing. Restart with /start"
-                )
-
-                return
+        if not buses:
 
             await query.message.reply_text(
-                "🔍 Fetching live buses..."
+                "❌ No buses found"
             )
 
-            buses = scrape_prices(
-                USER_STATE[chat_id]["source_id"],
-                USER_STATE[chat_id]["destination_id"],
-                USER_STATE[chat_id]["date"]
-            )
+            return
 
-            print("BUSES:", buses)
+        USER_STATE[chat_id]["buses"] = buses
 
-            if not buses:
+        keyboard = []
 
-                await query.message.reply_text(
-                    "❌ No buses found."
+        for index, bus in enumerate(buses[:25]):
+
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{bus['operator']} • ₹{bus['price']}",
+                    callback_data=f"bus|{index}"
                 )
+            ])
 
-                return
-
-            USER_STATE[chat_id]["buses"] = buses
-
-            keyboard = []
-
-            for index, bus in enumerate(buses[:25]):
-
-                operator = bus.get(
-                    "operator",
-                    "Unknown"
-                )
-
-                price = bus.get(
-                    "price",
-                    0
-                )
-
-                keyboard.append([
-                    InlineKeyboardButton(
-                        f"{operator} • ₹{price}",
-                        callback_data=f"bus|{index}"
-                    )
-                ])
-
-            await query.message.reply_text(
-                "🚌 Select Bus",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-
-        except Exception as e:
-
-            print("DATE CALLBACK ERROR:", e)
-
-            await query.message.reply_text(
-                f"❌ Failed to fetch buses.\n\n{str(e)}"
-            )
-
-    # BUS SELECTED
+        await query.message.reply_text(
+            "🚌 Select Bus",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
     elif data.startswith("bus|"):
 
-        try:
+        index = int(data.split("|")[1])
 
-            index = int(data.split("|")[1])
+        bus = USER_STATE[chat_id]["buses"][index]
 
-            bus = USER_STATE[chat_id]["buses"][index]
+        add_monitor(
+            chat_id,
+            USER_STATE[chat_id]["monitor_name"],
+            bus["operator"],
+            USER_STATE[chat_id]["source"],
+            USER_STATE[chat_id]["destination"],
+            USER_STATE[chat_id]["date"],
+            bus["price"],
+            bus["booking_link"],
+            USER_STATE[chat_id]["source_id"],
+            USER_STATE[chat_id]["destination_id"]
+        )
 
-            add_monitor(
-                chat_id=chat_id,
-                monitor_name=USER_STATE[chat_id]["monitor_name"],
-                operator=bus["operator"],
-                source=USER_STATE[chat_id]["source"],
-                destination=USER_STATE[chat_id]["destination"],
-                travel_date=USER_STATE[chat_id]["date"],
-                current_price=bus["price"],
-                booking_link=bus["booking_link"]
-            )
-
-            await query.message.reply_text(
-                f"""
+        await query.message.reply_text(
+            f'''
 ✅ Monitor Created
 
-📝 Name:
-{USER_STATE[chat_id]["monitor_name"]}
+🚌 {bus["operator"]}
+💰 Current Price: ₹{bus["price"]}
 
-🚌 Bus:
-{bus["operator"]}
-
-💰 Price:
-₹{bus["price"]}
-
-💺 Seats:
-{bus.get("available_seats", 0)}
-
-🔗 Booking:
-{bus["booking_link"]}
-"""
-            )
-
-        except Exception as e:
-
-            print("BUS SELECT ERROR:", e)
-
-            await query.message.reply_text(
-                "❌ Failed to create monitor."
-            )
-
-    # VIEW MONITOR
+You will now receive:
+📉 Price Drop Alerts
+📈 Price Hike Alerts
+'''
+        )
 
     elif data.startswith("view|"):
 
-        try:
+        monitor_id = int(data.split("|")[1])
 
-            monitor_id = int(data.split("|")[1])
+        monitors = get_monitors(chat_id)
 
-            monitors = get_monitors(chat_id)
+        selected = None
 
-            selected = None
+        for monitor in monitors:
 
-            for item in monitors:
+            if monitor[0] == monitor_id:
+                selected = monitor
 
-                if item[0] == monitor_id:
-                    selected = item
+        if not selected:
+            return
 
-            if not selected:
-                return
-
-            keyboard = [
-                [
-                    InlineKeyboardButton(
-                        "❌ Remove Monitor",
-                        callback_data=f"delete|{monitor_id}"
-                    )
-                ]
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "❌ Remove Monitor",
+                    callback_data=f"delete|{monitor_id}"
+                )
             ]
+        ]
 
-            await query.message.reply_text(
-                f"""
-📋 Monitor Status
+        await query.message.reply_text(
+            f'''
+📋 Monitor
 
-📝 Name:
-{selected[2]}
+📝 {selected[2]}
+🚌 {selected[3]}
+💰 ₹{selected[7]}
 
-🚌 Bus:
-{selected[3]}
-
-📍 Route:
-{selected[4]} → {selected[5]}
-
-💰 Current Price:
-₹{selected[7]}
-
-🔗 Booking:
-{selected[8]}
-""",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-
-        except Exception as e:
-
-            print("VIEW MONITOR ERROR:", e)
-
-            await query.message.reply_text(
-                "❌ Failed to load monitor."
-            )
-
-    # DELETE MONITOR
+🔗 {selected[8]}
+''',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
     elif data.startswith("delete|"):
 
-        try:
+        monitor_id = int(data.split("|")[1])
 
-            monitor_id = int(data.split("|")[1])
+        delete_monitor(monitor_id)
 
-            delete_monitor(monitor_id)
-
-            await query.message.reply_text(
-                "✅ Monitor Removed"
-            )
-
-        except Exception as e:
-
-            print("DELETE MONITOR ERROR:", e)
-
-            await query.message.reply_text(
-                "❌ Failed to remove monitor."
-            )
+        await query.message.reply_text(
+            "✅ Monitor Removed"
+        )
