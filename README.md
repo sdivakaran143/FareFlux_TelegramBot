@@ -1,8 +1,11 @@
-
-FareFlux Monitor Naming Fix
+FareFlux Final Upgrade
 
 Included:
-- Dynamic monitor naming
-- Auto append bus operator name
-- Avoid duplicate monitor names
-- Better monitor management
+- Discounted prices
+- Offers display
+- Premium bus details
+- Search buses by keyword
+- Unique monitor names
+- Pagination support
+- Morning/Night filter
+- Price low to high sorting
