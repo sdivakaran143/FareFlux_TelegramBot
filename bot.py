@@ -33,6 +33,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 app = Application.builder().token(BOT_TOKEN).build()
 
 conversation_handler = ConversationHandler(
+    per_message=True,
     entry_points=[
         CommandHandler("start", start)
     ],
@@ -44,7 +45,7 @@ conversation_handler = ConversationHandler(
             ),
             CallbackQueryHandler(
                 source_selected,
-                pattern="^source\|"
+                pattern=r"^source\|"
             )
         ],
         DESTINATION: [
@@ -54,17 +55,17 @@ conversation_handler = ConversationHandler(
             ),
             CallbackQueryHandler(
                 destination_selected,
-                pattern="^destination\|"
+                pattern=r"^destination\|"
             )
         ],
         DATE: [
             CallbackQueryHandler(
                 date_selected,
-                pattern="^(today|tomorrow)$"
+                pattern=r"^(today|tomorrow)$"
             ),
             CallbackQueryHandler(
                 bus_selected,
-                pattern="^bus\|"
+                pattern=r"^bus\|"
             )
         ]
     },
@@ -78,5 +79,6 @@ start_scheduler(app.bot)
 print("Bot started...")
 
 app.run_polling(
-    drop_pending_updates=True
+    drop_pending_updates=True,
+    close_loop=False
 )
