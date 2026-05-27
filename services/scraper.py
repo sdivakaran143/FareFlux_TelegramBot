@@ -32,7 +32,7 @@ def scrape_prices(
             date,
 
         "limit":
-            10,
+            100,
 
         "offset":
             0,
@@ -120,7 +120,7 @@ def scrape_prices(
         "User-Agent":
             (
                 "Mozilla/5.0 "
-                "(Macintosh; Intel Mac OS X 10.15)"
+                "(Macintosh; Intel Mac OS X 10_15_7)"
             ),
 
         "Accept":
@@ -140,28 +140,48 @@ def scrape_prices(
     }
 
     print("\n========================")
-    print("REDBUS CURL REQUEST")
+    print("REQUEST")
     print("========================")
 
-    curl_cmd = f'''
+    print("\nURL:")
+    print(url)
+
+    print("\nPARAMS:")
+    print(
+        json.dumps(
+            params,
+            indent=2
+        )
+    )
+
+    print("\nPAYLOAD:")
+    print(
+        json.dumps(
+            payload,
+            indent=2
+        )
+    )
+
+    print("\nHEADERS:")
+    print(
+        json.dumps(
+            headers,
+            indent=2
+        )
+    )
+
+    curl_command = f'''
 curl "{url}" \\
 -X POST \\
 -H "User-Agent: {headers["User-Agent"]}" \\
--H "Accept: {headers["Accept"]}" \\
 -H "Content-Type: application/json" \\
 -H "Origin: https://www.redbus.in" \\
 -H "Referer: https://www.redbus.in/" \\
 --data-raw '{json.dumps(payload)}'
 '''
 
-    print("\nCURL COMMAND:")
-    print(curl_cmd)
-
-    print("\nREQUEST PARAMS:")
-    print(json.dumps(params, indent=2))
-
-    print("\nREQUEST PAYLOAD:")
-    print(json.dumps(payload, indent=2))
+    print("\nCURL:")
+    print(curl_command)
 
     try:
 
@@ -174,7 +194,7 @@ curl "{url}" \\
         )
 
         print("\n========================")
-        print("REDBUS RESPONSE")
+        print("RESPONSE")
         print("========================")
 
         print("\nSTATUS CODE:")
@@ -184,14 +204,16 @@ curl "{url}" \\
         print(response.url)
 
         print("\nRESPONSE HEADERS:")
-        print(dict(response.headers))
+        print(
+            dict(response.headers)
+        )
 
         print("\nRAW RESPONSE:")
         print(response.text[:10000])
 
         if response.status_code != 200:
 
-            print("\nINVALID STATUS")
+            print("\nINVALID STATUS CODE")
 
             return []
 
@@ -233,12 +255,20 @@ curl "{url}" \\
                 "departure":
                     bus.get("departureTime"),
 
+                "bus_type":
+                    bus.get("busType"),
+
                 "booking_link":
                     "https://www.redbus.in/"
             }
 
             print("\nBUS:")
-            print(json.dumps(parsed_bus, indent=2))
+            print(
+                json.dumps(
+                    parsed_bus,
+                    indent=2
+                )
+            )
 
             buses.append(parsed_bus)
 
@@ -247,7 +277,7 @@ curl "{url}" \\
 
         print("\n========================")
         print("SCRAPER END")
-        print("========================\n")
+        print("========================")
 
         return buses
 
