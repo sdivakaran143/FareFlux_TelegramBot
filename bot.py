@@ -42,7 +42,7 @@ app.add_handler(
     )
 )
 
-print("FareFlux Started")
+print("DIVA'S FareFlux Bot Started")
 
 app.run_polling(
     drop_pending_updates=True,
