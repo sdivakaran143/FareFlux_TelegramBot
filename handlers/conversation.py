@@ -1,247 +1,242 @@
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes
 
-    from telegram import (
-        Update,
-        InlineKeyboardButton,
-        InlineKeyboardMarkup
-    )
+from services.location_service import search_place
+from services.scraper import scrape_prices
 
-    from telegram.ext import ContextTypes
+from database import (
+    add_monitor,
+    get_monitors,
+    delete_monitor
+)
 
-    from services.location_service import search_place
-    from services.scraper import scrape_prices
+USER_STATE = {}
 
-    from database import (
-        add_monitor,
-        get_monitors,
-        delete_monitor
-    )
 
-    USER_STATE = {}
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    async def start_command(update: Update, context):
-
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "➕ Create Monitor",
-                    callback_data="create_monitor"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "📋 My Monitors",
-                    callback_data="my_monitors"
-                )
-            ]
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "➕ Create Monitor",
+                callback_data="create_monitor"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "📋 My Monitors",
+                callback_data="my_monitors"
+            )
         ]
+    ]
+
+    await update.message.reply_text(
+        "🚌 FareFlux Pro",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    chat_id = update.effective_chat.id
+
+    text = update.message.text
+
+    if chat_id not in USER_STATE:
+        return
+
+    step = USER_STATE[chat_id]["step"]
+
+    if step == "monitor_name":
+
+        USER_STATE[chat_id]["monitor_name"] = text
+        USER_STATE[chat_id]["step"] = "source"
 
         await update.message.reply_text(
-            "🚌 FareFlux Pro",
+            "📍 Enter Source"
+        )
+
+    elif step == "source":
+
+        results = search_place(text)
+
+        USER_STATE[chat_id]["source_results"] = results
+
+        keyboard = []
+
+        for index, item in enumerate(results):
+
+            keyboard.append([
+                InlineKeyboardButton(
+                    item["name"],
+                    callback_data=f"source|{index}"
+                )
+            ])
+
+        await update.message.reply_text(
+            "📍 Select Source",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+    elif step == "destination":
+
+        results = search_place(text)
+
+        USER_STATE[chat_id]["destination_results"] = results
+
+        keyboard = []
+
+        for index, item in enumerate(results):
+
+            keyboard.append([
+                InlineKeyboardButton(
+                    item["name"],
+                    callback_data=f"destination|{index}"
+                )
+            ])
+
+        await update.message.reply_text(
+            "📍 Select Destination",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
 
-    async def message_handler(update: Update, context):
+async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-        chat_id = update.effective_chat.id
+    query = update.callback_query
 
-        text = update.message.text
+    await query.answer()
 
-        if chat_id not in USER_STATE:
+    chat_id = query.message.chat_id
+
+    data = query.data
+
+    if data == "create_monitor":
+
+        USER_STATE[chat_id] = {
+            "step": "monitor_name"
+        }
+
+        await query.message.reply_text(
+            "📝 Enter Monitor Name"
+        )
+
+    elif data == "my_monitors":
+
+        monitors = get_monitors(chat_id)
+
+        if not monitors:
+
+            await query.message.reply_text(
+                "No monitors found"
+            )
+
             return
 
-        step = USER_STATE[chat_id]["step"]
+        keyboard = []
 
-        if step == "monitor_name":
+        for monitor in monitors:
 
-            USER_STATE[chat_id]["monitor_name"] = text
-            USER_STATE[chat_id]["step"] = "source"
-
-            await update.message.reply_text(
-                "📍 Enter Source"
-            )
-
-        elif step == "source":
-
-            results = search_place(text)
-
-            USER_STATE[chat_id]["source_results"] = results
-
-            keyboard = []
-
-            for index, item in enumerate(results):
-
-                keyboard.append([
-                    InlineKeyboardButton(
-                        item["name"],
-                        callback_data=f"source|{index}"
-                    )
-                ])
-
-            await update.message.reply_text(
-                "Select Source",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-
-        elif step == "destination":
-
-            results = search_place(text)
-
-            USER_STATE[chat_id]["destination_results"] = results
-
-            keyboard = []
-
-            for index, item in enumerate(results):
-
-                keyboard.append([
-                    InlineKeyboardButton(
-                        item["name"],
-                        callback_data=f"destination|{index}"
-                    )
-                ])
-
-            await update.message.reply_text(
-                "Select Destination",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-
-
-    async def callback_handler(update: Update, context):
-
-        query = update.callback_query
-
-        await query.answer()
-
-        chat_id = query.message.chat_id
-
-        data = query.data
-
-        if data == "create_monitor":
-
-            USER_STATE[chat_id] = {
-                "step": "monitor_name"
-            }
-
-            await query.message.reply_text(
-                "📝 Enter Monitor Name"
-            )
-
-        elif data == "my_monitors":
-
-            monitors = get_monitors(chat_id)
-
-            if not monitors:
-
-                await query.message.reply_text(
-                    "No monitors found"
+            keyboard.append([
+                InlineKeyboardButton(
+                    monitor[2],
+                    callback_data=f"view|{monitor[0]}"
                 )
+            ])
 
-                return
+        await query.message.reply_text(
+            "📋 Your Monitors",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
-            keyboard = []
+    elif data.startswith("source|"):
 
-            for monitor in monitors:
+        index = int(data.split("|")[1])
 
-                keyboard.append([
-                    InlineKeyboardButton(
-                        monitor[2],
-                        callback_data=f"view|{monitor[0]}"
-                    )
-                ])
+        source = USER_STATE[chat_id]["source_results"][index]["name"]
 
-            await query.message.reply_text(
-                "📋 Your Monitors",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+        USER_STATE[chat_id]["source"] = source
+        USER_STATE[chat_id]["step"] = "destination"
 
-        elif data.startswith("source|"):
+        await query.message.reply_text(
+            "📍 Enter Destination"
+        )
 
-            index = int(data.split("|")[1])
+    elif data.startswith("destination|"):
 
-            source = USER_STATE[chat_id]["source_results"][index]["name"]
+        index = int(data.split("|")[1])
 
-            USER_STATE[chat_id]["source"] = source
-            USER_STATE[chat_id]["step"] = "destination"
+        destination = USER_STATE[chat_id]["destination_results"][index]["name"]
 
-            await query.message.reply_text(
-                "📍 Enter Destination"
-            )
+        USER_STATE[chat_id]["destination"] = destination
 
-        elif data.startswith("destination|"):
-
-            index = int(data.split("|")[1])
-
-            destination = USER_STATE[chat_id]["destination_results"][index]["name"]
-
-            USER_STATE[chat_id]["destination"] = destination
-
-            keyboard = [
-                [
-                    InlineKeyboardButton(
-                        "Today",
-                        callback_data="today"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        "Tomorrow",
-                        callback_data="tomorrow"
-                    )
-                ]
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "Today",
+                    callback_data="today"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Tomorrow",
+                    callback_data="tomorrow"
+                )
             ]
+        ]
 
-            await query.message.reply_text(
-                "📅 Select Date",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+        await query.message.reply_text(
+            "📅 Select Date",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
-        elif data in ["today", "tomorrow"]:
+    elif data in ["today", "tomorrow"]:
 
-            USER_STATE[chat_id]["date"] = data
+        USER_STATE[chat_id]["date"] = data
 
-            buses = scrape_prices(
-                USER_STATE[chat_id]["source"],
-                USER_STATE[chat_id]["destination"],
-                data
-            )
+        buses = scrape_prices(
+            USER_STATE[chat_id]["source"],
+            USER_STATE[chat_id]["destination"],
+            data
+        )
 
-            USER_STATE[chat_id]["buses"] = buses
+        USER_STATE[chat_id]["buses"] = buses
 
-            keyboard = []
+        keyboard = []
 
-            for index, bus in enumerate(buses):
+        for index, bus in enumerate(buses):
 
-                keyboard.append([
-                    InlineKeyboardButton(
-                        f"{bus['operator']} • ₹{bus['price']} • {bus['website']}",
-                        callback_data=f"bus|{index}"
-                    )
-                ])
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{bus['operator']} • ₹{bus['price']} • {bus['website']}",
+                    callback_data=f"bus|{index}"
+                )
+            ])
 
-            await query.message.reply_text(
-                "🚌 Select Bus",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+        await query.message.reply_text(
+            "🚌 Select Bus",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
-        elif data.startswith("bus|"):
+    elif data.startswith("bus|"):
 
-            index = int(data.split("|")[1])
+        index = int(data.split("|")[1])
 
-            bus = USER_STATE[chat_id]["buses"][index]
+        bus = USER_STATE[chat_id]["buses"][index]
 
-            add_monitor(
-                chat_id=chat_id,
-                monitor_name=USER_STATE[chat_id]["monitor_name"],
-                operator=bus["operator"],
-                source=USER_STATE[chat_id]["source"],
-                destination=USER_STATE[chat_id]["destination"],
-                travel_date=USER_STATE[chat_id]["date"],
-                current_price=bus["price"],
-                booking_link=bus["link"]
-            )
+        add_monitor(
+            chat_id=chat_id,
+            monitor_name=USER_STATE[chat_id]["monitor_name"],
+            operator=bus["operator"],
+            source=USER_STATE[chat_id]["source"],
+            destination=USER_STATE[chat_id]["destination"],
+            travel_date=USER_STATE[chat_id]["date"],
+            current_price=bus["price"],
+            booking_link=bus["link"]
+        )
 
-            await query.message.reply_text(
-                f'''
+        await query.message.reply_text(
+            f"""
 ✅ Monitor Created
 
 📝 Name:
@@ -258,35 +253,36 @@
 
 🔗 Link:
 {bus["link"]}
-'''
-            )
+"""
+        )
 
-        elif data.startswith("view|"):
+    elif data.startswith("view|"):
 
-            monitor_id = int(data.split("|")[1])
+        monitor_id = int(data.split("|")[1])
 
-            monitors = get_monitors(chat_id)
+        monitors = get_monitors(chat_id)
 
-            selected = None
+        selected = None
 
-            for item in monitors:
-                if item[0] == monitor_id:
-                    selected = item
+        for item in monitors:
 
-            if not selected:
-                return
+            if item[0] == monitor_id:
+                selected = item
 
-            keyboard = [
-                [
-                    InlineKeyboardButton(
-                        "❌ Remove Monitor",
-                        callback_data=f"delete|{monitor_id}"
-                    )
-                ]
+        if not selected:
+            return
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "❌ Remove Monitor",
+                    callback_data=f"delete|{monitor_id}"
+                )
             ]
+        ]
 
-            await query.message.reply_text(
-                f'''
+        await query.message.reply_text(
+            f"""
 📋 Monitor Status
 
 📝 Name:
@@ -303,16 +299,16 @@
 
 🔗 Booking:
 {selected[8]}
-''',
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+""",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
-        elif data.startswith("delete|"):
+    elif data.startswith("delete|"):
 
-            monitor_id = int(data.split("|")[1])
+        monitor_id = int(data.split("|")[1])
 
-            delete_monitor(monitor_id)
+        delete_monitor(monitor_id)
 
-            await query.message.reply_text(
-                "✅ Monitor Removed"
-            )
+        await query.message.reply_text(
+            "✅ Monitor Removed"
+        )
