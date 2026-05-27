@@ -1,151 +1,111 @@
-from telegram import (
-    Update,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton
+from apscheduler.schedulers.background import BackgroundScheduler
+
+from database import (
+    get_monitors,
+    update_price
 )
 
-from telegram.ext import (
-    ContextTypes,
-    ConversationHandler
-)
+from services.scraper import scrape_prices
 
-from services.location_service import search_place
-from database import add_monitor
-
-SOURCE = 1
-DESTINATION = 2
-DATE = 3
-THRESHOLD = 4
+scheduler = BackgroundScheduler()
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def check_monitor(bot, monitor):
 
-    await update.message.reply_text(
-        "Enter Source Location"
-    )
+    (
+        monitor_id,
+        chat_id,
+        source,
+        destination,
+        travel_date,
+        threshold,
+        frequency,
+        last_price
+    ) = monitor
 
-    return SOURCE
+    try:
 
-
-async def source(update: Update, context):
-
-    place = search_place(update.message.text)
-
-    if not place:
-
-        await update.message.reply_text(
-            "Invalid source."
+        buses = scrape_prices(
+            source,
+            destination,
+            travel_date
         )
 
-        return SOURCE
+        if not buses:
+            return
 
-    context.user_data["source"] = update.message.text
-
-    await update.message.reply_text(
-        "Enter Destination"
-    )
-
-    return DESTINATION
-
-
-async def destination(update: Update, context):
-
-    place = search_place(update.message.text)
-
-    if not place:
-
-        await update.message.reply_text(
-            "Invalid destination."
+        cheapest = min(
+            [x["price"] for x in buses]
         )
 
-        return DESTINATION
+        if cheapest < last_price:
 
-    context.user_data["destination"] = update.message.text
-
-    await update.message.reply_text(
-        "Enter Travel Date (YYYY-MM-DD)"
-    )
-
-    return DATE
-
-
-async def date(update: Update, context):
-
-    context.user_data["date"] = update.message.text
-
-    await update.message.reply_text(
-        "Enter Threshold Fare"
-    )
-
-    return THRESHOLD
-
-
-async def threshold(update: Update, context):
-
-    context.user_data["threshold"] = int(
-        update.message.text
-    )
-
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                "5 Min",
-                callback_data="5"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "15 Min",
-                callback_data="15"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "60 Min",
-                callback_data="60"
-            )
-        ]
-    ]
-
-    reply_markup = InlineKeyboardMarkup(
-        keyboard
-    )
-
-    await update.message.reply_text(
-        "Select Monitoring Frequency",
-        reply_markup=reply_markup
-    )
-
-    return ConversationHandler.END
-
-
-async def frequency(update: Update, context):
-
-    query = update.callback_query
-
-    await query.answer()
-
-    frequency_value = int(query.data)
-
-    add_monitor(
-        chat_id=query.message.chat_id,
-        source=context.user_data["source"],
-        destination=context.user_data["destination"],
-        travel_date=context.user_data["date"],
-        threshold=context.user_data["threshold"],
-        frequency=frequency_value
-    )
-
-    await query.edit_message_text(
-        f"""
-✅ Monitor Created
+            await bot.send_message(
+                chat_id=chat_id,
+                text=f"""
+🚌 Fare Dropped
 
 Route:
-{context.user_data["source"]}
-→
-{context.user_data["destination"]}
+{source} → {destination}
 
-Frequency:
-Every {frequency_value} minutes
+Old Price:
+₹{last_price}
+
+New Price:
+₹{cheapest}
 """
-    )
+            )
+
+            update_price(
+                monitor_id,
+                cheapest
+            )
+
+        elif cheapest <= threshold:
+
+            await bot.send_message(
+                chat_id=chat_id,
+                text=f"""
+🔥 Fare Alert
+
+Threshold Reached
+
+Route:
+{source} → {destination}
+
+Current Fare:
+₹{cheapest}
+
+Threshold:
+₹{threshold}
+"""
+            )
+
+    except Exception as e:
+
+        print(
+            "Scheduler Error:",
+            str(e)
+        )
+
+
+def start_scheduler(bot):
+
+    monitors = get_monitors()
+
+    for monitor in monitors:
+
+        monitor_id = monitor[0]
+
+        frequency = monitor[6]
+
+        scheduler.add_job(
+            check_monitor,
+            "interval",
+            minutes=frequency,
+            args=[bot, monitor],
+            id=str(monitor_id),
+            replace_existing=True
+        )
+
+    scheduler.start()
