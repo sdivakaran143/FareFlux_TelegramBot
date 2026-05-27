@@ -90,24 +90,11 @@ def start_scheduler(application):
                     monitor_key
                 )
 
-                print(
-                    f"OLD PRICE: {old_price}"
-                )
-
-                print(
-                    f"CURRENT PRICE: "
-                    f"{current_price}"
-                )
-
                 if old_price is None:
 
                     LAST_PRICES[
                         monitor_key
                     ] = current_price
-
-                    print(
-                        "INITIAL PRICE SAVED"
-                    )
 
                     continue
 
@@ -155,9 +142,6 @@ def start_scheduler(application):
 
                         f"{direction}"
                     )
-
-                    print("\nALERT:")
-                    print(message)
 
                     asyncio.run(
 
