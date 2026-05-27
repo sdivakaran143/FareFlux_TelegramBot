@@ -22,14 +22,13 @@ from handlers.conversation import (
     bus_selected,
     SOURCE,
     DESTINATION,
-    DATE
+    DATE,
+    BUS
 )
 
 from scheduler import start_scheduler
 
-logging.getLogger(
-    "telegram.ext.ConversationHandler"
-).setLevel(logging.ERROR)
+logging.basicConfig(level=logging.INFO)
 
 load_dotenv()
 
@@ -76,7 +75,10 @@ conversation_handler = ConversationHandler(
             CallbackQueryHandler(
                 date_selected,
                 pattern=r"^(today|tomorrow)$"
-            ),
+            )
+        ],
+
+        BUS: [
 
             CallbackQueryHandler(
                 bus_selected,

@@ -1,14 +1,31 @@
-# FarePilot Smart Bot
+# FarePilot Ultimate
 
-Features:
+## Features
 - Smart source suggestions
-- Today/Tomorrow buttons
-- Bus selection buttons
-- Monitor specific bus
-- Instant fare alerts
-- Railway ready
+- Smart destination suggestions
+- Today/Tomorrow date selection
+- Bus list selection
+- Fare monitoring
+- Instant Telegram alerts
+- Railway deployment ready
 
-Deploy:
-1. Upload to GitHub
+## Local Run
+
+1. Create .env
+
+BOT_TOKEN=YOUR_TOKEN
+
+2. Install
+
+pip install -r requirements.txt
+
+3. Run
+
+python bot.py
+
+## Railway Deploy
+
+1. Push to GitHub
 2. Deploy on Railway
 3. Add BOT_TOKEN variable
+4. Done
