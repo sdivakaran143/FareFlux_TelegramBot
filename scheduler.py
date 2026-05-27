@@ -1,81 +1,43 @@
 from apscheduler.schedulers.background import BackgroundScheduler
+from database import get_monitors, update_price
+from services.scraper import scrape_prices
 
-        from database import (
-            get_monitors,
-            update_price
-        )
+scheduler = BackgroundScheduler()
 
-        from services.scraper import scrape_prices
+async def check_monitor(bot, monitor):
 
-        scheduler = BackgroundScheduler()
+    monitor_id, chat_id, operator, source, destination, travel_date, current_price = monitor
 
+    buses = scrape_prices(source, destination, travel_date)
 
-        async def check_monitor(bot, monitor):
+    for bus in buses:
 
-            (
-                monitor_id,
-                chat_id,
-                operator,
-                source,
-                destination,
-                travel_date,
-                current_price
-            ) = monitor
+        if bus["operator"] == operator:
 
-            buses = scrape_prices(
-                source,
-                destination,
-                travel_date
-            )
+            latest_price = bus["price"]
 
-            for bus in buses:
+            if latest_price < current_price:
 
-                if bus["operator"] == operator:
-
-                    latest_price = bus["price"]
-
-                    if latest_price < current_price:
-
-                        await bot.send_message(
-                            chat_id=chat_id,
-                            text=f"""
-🔥 Fare Dropped
-
-🚌 Operator:
-{operator}
-
-📍 Route:
-{source}
-→
-{destination}
-
-💰 Old Fare:
-₹{current_price}
-
-💸 New Fare:
-₹{latest_price}
-"""
-                        )
-
-                        update_price(
-                            monitor_id,
-                            latest_price
-                        )
-
-
-        def start_scheduler(bot):
-
-            monitors = get_monitors()
-
-            for monitor in monitors:
-
-                scheduler.add_job(
-                    check_monitor,
-                    "interval",
-                    minutes=1,
-                    args=[bot, monitor],
-                    id=str(monitor[0]),
-                    replace_existing=True
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=f"🔥 Fare Dropped\n\n{operator}\nOld: ₹{current_price}\nNew: ₹{latest_price}"
                 )
 
-            scheduler.start()
+                update_price(monitor_id, latest_price)
+
+def start_scheduler(bot):
+
+    monitors = get_monitors()
+
+    for monitor in monitors:
+
+        scheduler.add_job(
+            check_monitor,
+            "interval",
+            minutes=1,
+            args=[bot, monitor],
+            id=str(monitor[0]),
+            replace_existing=True
+        )
+
+    scheduler.start()

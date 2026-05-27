@@ -1,25 +1,10 @@
 import requests
 
-
 def search_place(query):
-
-    url = "https://nominatim.openstreetmap.org/search"
-
-    headers = {
-        "User-Agent": "farepilot"
-    }
-
-    params = {
-        "q": query,
-        "format": "json",
-        "limit": 5
-    }
-
     response = requests.get(
-        url,
-        headers=headers,
-        params=params,
+        "https://nominatim.openstreetmap.org/search",
+        params={"q": query, "format": "json", "limit": 5},
+        headers={"User-Agent": "fareflux"},
         timeout=20
     )
-
     return response.json()
