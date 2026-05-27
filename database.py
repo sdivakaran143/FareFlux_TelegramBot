@@ -1,4 +1,3 @@
-
 import sqlite3
 
 conn = sqlite3.connect("monitors.db", check_same_thread=False)
@@ -8,26 +7,40 @@ cursor.execute('''
 CREATE TABLE IF NOT EXISTS monitors (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     chat_id TEXT,
+    operator TEXT,
     source TEXT,
     destination TEXT,
     travel_date TEXT,
-    threshold INTEGER,
-    frequency INTEGER,
-    last_price INTEGER
+    current_price INTEGER
 )
 ''')
 
 conn.commit()
 
-def add_monitor(chat_id, source, destination, travel_date, threshold, frequency):
+def add_monitor(chat_id, operator, source, destination, travel_date, current_price):
+
     cursor.execute(
         '''
-        INSERT INTO monitors
-        (chat_id, source, destination, travel_date, threshold, frequency, last_price)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO monitors (
+            chat_id,
+            operator,
+            source,
+            destination,
+            travel_date,
+            current_price
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
         ''',
-        (chat_id, source, destination, travel_date, threshold, frequency, 999999)
+        (
+            chat_id,
+            operator,
+            source,
+            destination,
+            travel_date,
+            current_price
+        )
     )
+
     conn.commit()
 
 def get_monitors():
@@ -35,8 +48,10 @@ def get_monitors():
     return cursor.fetchall()
 
 def update_price(monitor_id, price):
+
     cursor.execute(
-        "UPDATE monitors SET last_price=? WHERE id=?",
+        "UPDATE monitors SET current_price=? WHERE id=?",
         (price, monitor_id)
     )
+
     conn.commit()

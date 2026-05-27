@@ -1,29 +1,23 @@
-
 import requests
 
 def search_place(query):
 
     url = "https://nominatim.openstreetmap.org/search"
 
-    headers = {
-        "User-Agent": "bus-fare-notifier"
-    }
-
     params = {
         "q": query,
         "format": "json",
-        "limit": 1
+        "limit": 5
+    }
+
+    headers = {
+        "User-Agent": "farepilot"
     }
 
     response = requests.get(
         url,
-        headers=headers,
-        params=params
+        params=params,
+        headers=headers
     )
 
-    data = response.json()
-
-    if not data:
-        return None
-
-    return data[0]["display_name"]
+    return response.json()

@@ -4,7 +4,6 @@
     "builder": "DOCKERFILE"
   },
   "deploy": {
-    "startCommand": "python -u bot.py",
     "restartPolicyType": "ALWAYS"
   }
 }

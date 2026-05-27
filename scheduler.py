@@ -9,85 +9,52 @@ from services.scraper import scrape_prices
 
 scheduler = BackgroundScheduler()
 
-
 async def check_monitor(bot, monitor):
 
     (
         monitor_id,
         chat_id,
+        operator,
         source,
         destination,
         travel_date,
-        threshold,
-        frequency,
-        last_price
+        current_price
     ) = monitor
 
-    try:
+    buses = scrape_prices(
+        source,
+        destination,
+        travel_date
+    )
 
-        buses = scrape_prices(
-            source,
-            destination,
-            travel_date
-        )
+    for bus in buses:
 
-        if not buses:
-            return
+        if bus["operator"] == operator:
 
-        cheapest = min(
-            [x["price"] for x in buses]
-        )
+            latest = bus["price"]
 
-        if cheapest < last_price:
+            if latest < current_price:
 
-            await bot.send_message(
-                chat_id=chat_id,
-                text=f"""
-🚌 Fare Dropped
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=f'''
+🔥 Fare Dropped
 
-Route:
-{source} → {destination}
+Operator:
+{operator}
 
-Old Price:
-₹{last_price}
+Old:
+₹{current_price}
 
-New Price:
-₹{cheapest}
-"""
-            )
+New:
+₹{latest}
+'''
+                )
 
-            update_price(
-                monitor_id,
-                cheapest
-            )
-
-        elif cheapest <= threshold:
-
-            await bot.send_message(
-                chat_id=chat_id,
-                text=f"""
-🔥 Fare Alert
-
-Threshold Reached
-
-Route:
-{source} → {destination}
-
-Current Fare:
-₹{cheapest}
-
-Threshold:
-₹{threshold}
-"""
-            )
-
-    except Exception as e:
-
-        print(
-            "Scheduler Error:",
-            str(e)
-        )
-
+                update_price(
+                    monitor_id,
+                    latest
+                )
 
 def start_scheduler(bot):
 
@@ -95,16 +62,12 @@ def start_scheduler(bot):
 
     for monitor in monitors:
 
-        monitor_id = monitor[0]
-
-        frequency = monitor[6]
-
         scheduler.add_job(
             check_monitor,
             "interval",
-            minutes=frequency,
+            minutes=1,
             args=[bot, monitor],
-            id=str(monitor_id),
+            id=str(monitor[0]),
             replace_existing=True
         )
 
