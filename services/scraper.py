@@ -1,4 +1,3 @@
-
 import requests
 import json
 
@@ -33,7 +32,7 @@ def scrape_prices(
             date,
 
         "limit":
-            50,
+            10,
 
         "offset":
             0,
@@ -69,35 +68,114 @@ def scrape_prices(
             "false"
     }
 
+    payload = {
+
+        "appliedFilterCount": 0,
+
+        "onlyShow": [],
+
+        "dt": [],
+
+        "SeaterType": [],
+
+        "AcType": [],
+
+        "travelsList": [],
+
+        "amtList": [],
+
+        "bpList": [],
+
+        "dpList": [],
+
+        "CampaignFilter": [],
+
+        "at": [],
+
+        "persuasionList": [],
+
+        "bpIdentifier": [],
+
+        "dpIdentifier": [],
+
+        "bcf": [],
+
+        "opBusTypeFilterList": [],
+
+        "priceRange": [],
+
+        "RouteIds": [],
+
+        "bpKeys": [],
+
+        "dpKeys": [],
+
+        "streaksFilter": [],
+
+        "preRouteFilters": None
+    }
+
     headers = {
 
         "User-Agent":
-            "Mozilla/5.0",
+            (
+                "Mozilla/5.0 "
+                "(Macintosh; Intel Mac OS X 10.15)"
+            ),
 
         "Accept":
+            "*/*",
+
+        "Accept-Language":
+            "en-US,en;q=0.9",
+
+        "Content-Type":
             "application/json",
+
+        "Origin":
+            "https://www.redbus.in",
 
         "Referer":
             "https://www.redbus.in/"
     }
 
-    print("\nREQUEST URL:")
-    print(url)
+    print("\n========================")
+    print("REDBUS CURL REQUEST")
+    print("========================")
+
+    curl_cmd = f'''
+curl "{url}" \\
+-X POST \\
+-H "User-Agent: {headers["User-Agent"]}" \\
+-H "Accept: {headers["Accept"]}" \\
+-H "Content-Type: application/json" \\
+-H "Origin: https://www.redbus.in" \\
+-H "Referer: https://www.redbus.in/" \\
+--data-raw '{json.dumps(payload)}'
+'''
+
+    print("\nCURL COMMAND:")
+    print(curl_cmd)
 
     print("\nREQUEST PARAMS:")
     print(json.dumps(params, indent=2))
 
-    print("\nREQUEST HEADERS:")
-    print(json.dumps(headers, indent=2))
+    print("\nREQUEST PAYLOAD:")
+    print(json.dumps(payload, indent=2))
 
     try:
 
-        response = requests.get(
+        response = requests.post(
             url,
             params=params,
             headers=headers,
+            json=payload,
             timeout=30
         )
+
+        print("\n========================")
+        print("REDBUS RESPONSE")
+        print("========================")
 
         print("\nSTATUS CODE:")
         print(response.status_code)
@@ -105,12 +183,15 @@ def scrape_prices(
         print("\nFINAL URL:")
         print(response.url)
 
+        print("\nRESPONSE HEADERS:")
+        print(dict(response.headers))
+
         print("\nRAW RESPONSE:")
-        print(response.text[:5000])
+        print(response.text[:10000])
 
         if response.status_code != 200:
 
-            print("\nINVALID STATUS CODE")
+            print("\nINVALID STATUS")
 
             return []
 
@@ -156,7 +237,7 @@ def scrape_prices(
                     "https://www.redbus.in/"
             }
 
-            print("\nBUS FOUND:")
+            print("\nBUS:")
             print(json.dumps(parsed_bus, indent=2))
 
             buses.append(parsed_bus)
