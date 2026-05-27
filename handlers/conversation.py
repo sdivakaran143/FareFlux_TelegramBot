@@ -13,7 +13,10 @@ from database import add_monitor
 USER_STATE = {}
 
 
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     chat_id = update.effective_chat.id
 
@@ -21,20 +24,19 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "step": "source"
     }
 
-    print("START:", USER_STATE)
-
     await update.message.reply_text(
         "🚌 Enter Source Location"
     )
 
 
-async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def message_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     chat_id = update.effective_chat.id
 
     text = update.message.text
-
-    print("MESSAGE:", text)
 
     if chat_id not in USER_STATE:
 
@@ -44,13 +46,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     step = USER_STATE[chat_id]["step"]
 
-    print("STEP:", step)
+    # SOURCE FLOW
 
     if step == "source":
 
         results = search_place(text)
-
-        print("SOURCE RESULTS:", results)
 
         if not results:
 
@@ -60,14 +60,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             return
 
+        USER_STATE[chat_id]["source_results"] = results
+
         keyboard = []
 
-        for item in results:
+        for index, item in enumerate(results):
 
             keyboard.append([
                 InlineKeyboardButton(
                     item["display_name"][:50],
-                    callback_data=f"source|{item['display_name']}"
+                    callback_data=f"source|{index}"
                 )
             ])
 
@@ -76,11 +78,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
+    # DESTINATION FLOW
+
     elif step == "destination":
 
         results = search_place(text)
-
-        print("DEST RESULTS:", results)
 
         if not results:
 
@@ -90,14 +92,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             return
 
+        USER_STATE[chat_id]["destination_results"] = results
+
         keyboard = []
 
-        for item in results:
+        for index, item in enumerate(results):
 
             keyboard.append([
                 InlineKeyboardButton(
                     item["display_name"][:50],
-                    callback_data=f"destination|{item['display_name']}"
+                    callback_data=f"destination|{index}"
                 )
             ])
 
@@ -107,7 +111,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
-async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def callback_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     query = update.callback_query
 
@@ -117,24 +124,32 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    print("CALLBACK:", data)
+    # SOURCE SELECTED
 
     if data.startswith("source|"):
 
-        source = data.split("|", 1)[1]
+        index = int(data.split("|")[1])
+
+        source = USER_STATE[chat_id]["source_results"][index]["display_name"]
 
         USER_STATE[chat_id]["source"] = source
+
         USER_STATE[chat_id]["step"] = "destination"
 
         await query.message.reply_text(
             "📍 Enter Destination"
         )
 
+    # DESTINATION SELECTED
+
     elif data.startswith("destination|"):
 
-        destination = data.split("|", 1)[1]
+        index = int(data.split("|")[1])
+
+        destination = USER_STATE[chat_id]["destination_results"][index]["display_name"]
 
         USER_STATE[chat_id]["destination"] = destination
+
         USER_STATE[chat_id]["step"] = "date"
 
         keyboard = [
@@ -157,6 +172,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
+    # DATE SELECTED
+
     elif data in ["today", "tomorrow"]:
 
         USER_STATE[chat_id]["date"] = data
@@ -169,12 +186,14 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         keyboard = []
 
-        for bus in buses:
+        for index, bus in enumerate(buses):
+
+            USER_STATE[chat_id][f"bus_{index}"] = bus
 
             keyboard.append([
                 InlineKeyboardButton(
                     f"{bus['operator']} • ₹{bus['price']}",
-                    callback_data=f"bus|{bus['operator']}|{bus['price']}"
+                    callback_data=f"bus|{index}"
                 )
             ])
 
@@ -183,28 +202,35 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
+    # BUS SELECTED
+
     elif data.startswith("bus|"):
 
-        _, operator, price = data.split("|")
+        index = int(data.split("|")[1])
+
+        bus = USER_STATE[chat_id][f"bus_{index}"]
 
         add_monitor(
             chat_id=chat_id,
-            operator=operator,
+            operator=bus["operator"],
             source=USER_STATE[chat_id]["source"],
             destination=USER_STATE[chat_id]["destination"],
             travel_date=USER_STATE[chat_id]["date"],
-            current_price=int(price)
+            current_price=int(bus["price"])
         )
 
         await query.message.reply_text(
             f"""
 ✅ Monitor Created
 
-🚌 {operator}
+🚌 Operator:
+{bus["operator"]}
 
-💰 Fare:
-₹{price}
+💰 Current Fare:
+₹{bus["price"]}
 
 🔔 Monitoring started
+
+⏱ Checking every minute
 """
         )
