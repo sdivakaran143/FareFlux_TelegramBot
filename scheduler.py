@@ -9,8 +9,7 @@ from services.scraper import (
 )
 
 from storage import (
-    load_monitors,
-    save_monitors
+    load_monitors
 )
 
 
@@ -43,6 +42,11 @@ def start_scheduler(application):
 
             try:
 
+                print("\nMONITOR:")
+                print(
+                    monitor["monitor_name"]
+                )
+
                 buses = scrape_prices(
 
                     monitor["source_id"],
@@ -67,6 +71,11 @@ def start_scheduler(application):
                         break
 
                 if not target_bus:
+
+                    print(
+                        "BUS NOT FOUND"
+                    )
+
                     continue
 
                 current_price = (
@@ -81,32 +90,81 @@ def start_scheduler(application):
                     monitor_key
                 )
 
+                print(
+                    f"OLD PRICE: {old_price}"
+                )
+
+                print(
+                    f"CURRENT PRICE: "
+                    f"{current_price}"
+                )
+
                 if old_price is None:
 
                     LAST_PRICES[
                         monitor_key
                     ] = current_price
 
+                    print(
+                        "INITIAL PRICE SAVED"
+                    )
+
                     continue
 
                 if current_price != old_price:
 
-                    direction = "⬆️ Increased"
+                    direction = (
+                        "⬆️ Price Increased"
+                    )
 
                     if current_price < old_price:
-                        direction = "⬇️ Dropped"
+
+                        direction = (
+                            "⬇️ Price Dropped"
+                        )
 
                     message = (
-                        f"📢 Price Update\\n\\n"
-                        f"🚌 {target_bus['operator']}\\n"
-                        f"💰 Old: ₹{old_price}\\n"
-                        f"💰 New: ₹{current_price}\\n"
+
+                        f"📢 FareFlux Alert\n\n"
+
+                        f"🚌 "
+                        f"{target_bus['operator']}\n"
+
+                        f"💺 "
+                        f"{target_bus['bus_type']}\n"
+
+                        f"🕒 "
+                        f"{target_bus['departure']} "
+                        f"→ "
+                        f"{target_bus['arrival']}\n"
+
+                        f"⌛ "
+                        f"{target_bus['duration']} mins\n"
+
+                        f"💰 Old Price: "
+                        f"₹{old_price}\n"
+
+                        f"💰 New Price: "
+                        f"₹{current_price}\n"
+
+                        f"⭐ Rating: "
+                        f"{target_bus['rating']}\n"
+
+                        f"💺 Seats: "
+                        f"{target_bus['available_seats']}\n\n"
+
                         f"{direction}"
                     )
 
+                    print("\nALERT:")
+                    print(message)
+
                     asyncio.run(
+
                         send_alert(
+
                             monitor["chat_id"],
+
                             message
                         )
                     )
@@ -118,7 +176,7 @@ def start_scheduler(application):
             except Exception as e:
 
                 print(
-                    "SCHEDULER ERROR:"
+                    "\nSCHEDULER ERROR:"
                 )
 
                 print(str(e))
@@ -132,5 +190,5 @@ def start_scheduler(application):
     scheduler.start()
 
     print(
-        "Scheduler started"
+        "\nScheduler started"
     )
