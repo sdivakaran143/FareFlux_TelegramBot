@@ -1,166 +1,178 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
+
+from telegram.ext import ContextTypes
 
 from services.location_service import search_place
 from services.scraper import scrape_prices
+
 from database import add_monitor
 
-SOURCE = 1
-DESTINATION = 2
-DATE = 3
-BUS = 4
+USER_STATE = {}
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🚌 Enter Source Location")
-    return SOURCE
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-
-async def source(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    results = search_place(update.message.text)
-
-    if not results:
-        await update.message.reply_text("No source suggestions found.")
-        return SOURCE
-
-    keyboard = []
-
-    for item in results:
-        keyboard.append([
-            InlineKeyboardButton(
-                item["display_name"][:60],
-                callback_data=f"source|{item['display_name']}"
-            )
-        ])
+    USER_STATE[update.effective_chat.id] = {
+        "step": "source"
+    }
 
     await update.message.reply_text(
-        "📍 Select Source",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        "🚌 Enter Source Location"
     )
 
-    return SOURCE
+
+async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    chat_id = update.effective_chat.id
+
+    if chat_id not in USER_STATE:
+        return
+
+    state = USER_STATE[chat_id]
+
+    text = update.message.text
+
+    if state["step"] == "source":
+
+        results = search_place(text)
+
+        keyboard = []
+
+        for item in results:
+
+            keyboard.append([
+                InlineKeyboardButton(
+                    item["display_name"][:50],
+                    callback_data=f"source|{item['display_name']}"
+                )
+            ])
+
+        await update.message.reply_text(
+            "📍 Select Source",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+    elif state["step"] == "destination":
+
+        results = search_place(text)
+
+        keyboard = []
+
+        for item in results:
+
+            keyboard.append([
+                InlineKeyboardButton(
+                    item["display_name"][:50],
+                    callback_data=f"destination|{item['display_name']}"
+                )
+            ])
+
+        await update.message.reply_text(
+            "📍 Select Destination",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
 
-async def source_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
+
     await query.answer()
 
-    context.user_data["source"] = query.data.split("|", 1)[1]
+    chat_id = query.message.chat_id
 
-    await query.message.reply_text("📍 Enter Destination")
+    data = query.data
 
-    return DESTINATION
+    if data.startswith("source|"):
 
+        source = data.split("|", 1)[1]
 
-async def destination(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        USER_STATE[chat_id]["source"] = source
+        USER_STATE[chat_id]["step"] = "destination"
 
-    results = search_place(update.message.text)
+        await query.message.reply_text(
+            "📍 Enter Destination"
+        )
 
-    if not results:
-        await update.message.reply_text("No destination suggestions found.")
-        return DESTINATION
+    elif data.startswith("destination|"):
 
-    keyboard = []
+        destination = data.split("|", 1)[1]
 
-    for item in results:
-        keyboard.append([
-            InlineKeyboardButton(
-                item["display_name"][:60],
-                callback_data=f"destination|{item['display_name']}"
-            )
-        ])
+        USER_STATE[chat_id]["destination"] = destination
+        USER_STATE[chat_id]["step"] = "date"
 
-    await update.message.reply_text(
-        "📍 Select Destination",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "Today",
+                    callback_data="today"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Tomorrow",
+                    callback_data="tomorrow"
+                )
+            ]
+        ]
 
-    return DESTINATION
+        await query.message.reply_text(
+            "📅 Select Travel Date",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
+    elif data in ["today", "tomorrow"]:
 
-async def destination_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        USER_STATE[chat_id]["date"] = data
 
-    query = update.callback_query
-    await query.answer()
+        buses = scrape_prices(
+            USER_STATE[chat_id]["source"],
+            USER_STATE[chat_id]["destination"],
+            data
+        )
 
-    context.user_data["destination"] = query.data.split("|", 1)[1]
+        keyboard = []
 
-    keyboard = [
-        [InlineKeyboardButton("Today", callback_data="today")],
-        [InlineKeyboardButton("Tomorrow", callback_data="tomorrow")]
-    ]
+        for bus in buses:
 
-    await query.message.reply_text(
-        "📅 Select Travel Date",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{bus['operator']} • ₹{bus['price']}",
+                    callback_data=f"bus|{bus['operator']}|{bus['price']}"
+                )
+            ])
 
-    return DATE
+        await query.message.reply_text(
+            "🚌 Select Bus",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
+    elif data.startswith("bus|"):
 
-async def date_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        _, operator, price = data.split("|")
 
-    query = update.callback_query
-    await query.answer()
+        add_monitor(
+            chat_id=chat_id,
+            operator=operator,
+            source=USER_STATE[chat_id]["source"],
+            destination=USER_STATE[chat_id]["destination"],
+            travel_date=USER_STATE[chat_id]["date"],
+            current_price=int(price)
+        )
 
-    context.user_data["date"] = query.data
+        await query.message.reply_text(
+            f"""
+✅ Monitor Created
 
-    buses = scrape_prices(
-        context.user_data["source"],
-        context.user_data["destination"],
-        context.user_data["date"]
-    )
+🚌 {operator}
 
-    keyboard = []
-
-    for bus in buses:
-        keyboard.append([
-            InlineKeyboardButton(
-                f"{bus['operator']} • ₹{bus['price']} • {bus['departure']}",
-                callback_data=f"bus|{bus['operator']}|{bus['price']}"
-            )
-        ])
-
-    await query.message.reply_text(
-        "🚌 Select Bus To Monitor",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-    return BUS
-
-
-async def bus_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    query = update.callback_query
-    await query.answer()
-
-    _, operator, price = query.data.split("|")
-
-    add_monitor(
-        chat_id=query.message.chat_id,
-        operator=operator,
-        source=context.user_data["source"],
-        destination=context.user_data["destination"],
-        travel_date=context.user_data["date"],
-        current_price=int(price)
-    )
-
-    await query.edit_message_text(
-        f"""✅ Monitor Created
-
-🚌 Operator:
-{operator}
-
-💰 Current Fare:
+💰 Fare:
 ₹{price}
 
-⏱ Checking:
-Every 1 minute
-
-🔔 Alert:
-Immediate when fare drops"""
-    )
-
-    return ConversationHandler.END
+🔔 Monitoring every minute
+"""
+        )
