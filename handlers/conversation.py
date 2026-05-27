@@ -241,69 +241,101 @@ async def callback_handler(
     context: ContextTypes.DEFAULT_TYPE
 ):
 
-    query = update.callback_query
+    try:
 
-    await query.answer()
+        query = update.callback_query
 
-    data = query.data
+        if query:
 
-    chat_id = update.effective_chat.id
+            try:
+                await query.answer()
+            except Exception as e:
+                print("QUERY ANSWER ERROR:", e)
 
-    print("\nCALLBACK:", data)
+        data = query.data
 
-    if data == "create_monitor":
+        chat_id = update.effective_chat.id
 
-        USER_STATE[chat_id] = {
+        print("\nCALLBACK:", data)
 
-            "step": "monitor_name"
-        }
+        if data == "create_monitor":
 
-        await query.message.reply_text(
-            "📝 Enter Monitor Name"
-        )
+            USER_STATE[chat_id] = {
 
-    elif data == "view_monitors":
-
-        monitors = load_monitors()
-
-        user_monitors = [
-
-            monitor
-
-            for monitor in monitors
-
-            if monitor["chat_id"] == chat_id
-        ]
-
-        if not user_monitors:
+                "step": "monitor_name"
+            }
 
             await query.message.reply_text(
-                "❌ No monitors found"
+                "📝 Enter Monitor Name"
             )
 
-            return
-
-        text = "📋 Your Monitors\n\n"
-
-        for monitor in user_monitors:
-
-            text += (
-                f"• {monitor['monitor_name']}\n"
-            )
-
-        await query.message.reply_text(
-            text
-        )
-
-    elif data in ["today", "tomorrow"]:
-
-        if data == "today":
+        elif data == "today":
 
             doj = datetime.now().strftime(
                 "%d-%b-%Y"
             )
 
-        else:
+            print("TODAY DOJ:", doj)
+
+            USER_STATE[chat_id][
+                "date"
+            ] = doj
+
+            buses = scrape_prices(
+
+                USER_STATE[chat_id][
+                    "source_id"
+                ],
+
+                USER_STATE[chat_id][
+                    "destination_id"
+                ],
+
+                doj
+            )
+
+            USER_STATE[chat_id][
+                "buses"
+            ] = buses
+
+            if not buses:
+
+                await query.message.reply_text(
+                    "❌ No buses found"
+                )
+
+                return
+
+            keyboard = []
+
+            for index, bus in enumerate(
+                buses[:25]
+            ):
+
+                keyboard.append([
+
+                    InlineKeyboardButton(
+
+                        (
+                            f"{bus['operator']} "
+                            f"• ₹{bus['price']}"
+                        ),
+
+                        callback_data=f"bus|{index}"
+                    )
+                ])
+
+            await query.message.reply_text(
+
+                f"🚌 {len(buses)} buses found\n"
+                f"📅 Date: {doj}",
+
+                reply_markup=InlineKeyboardMarkup(
+                    keyboard
+                )
+            )
+
+        elif data == "tomorrow":
 
             doj = (
                 datetime.now()
@@ -312,134 +344,149 @@ async def callback_handler(
                 "%d-%b-%Y"
             )
 
-        print("DOJ:", doj)
-
-        USER_STATE[chat_id][
-            "date"
-        ] = doj
-
-        buses = scrape_prices(
+            print("TOMORROW DOJ:", doj)
 
             USER_STATE[chat_id][
-                "source_id"
-            ],
+                "date"
+            ] = doj
 
-            USER_STATE[chat_id][
-                "destination_id"
-            ],
+            buses = scrape_prices(
 
-            doj
-        )
-
-        USER_STATE[chat_id][
-            "buses"
-        ] = buses
-
-        if not buses:
-
-            await query.message.reply_text(
-                "❌ No buses found"
-            )
-
-            return
-
-        keyboard = []
-
-        for index, bus in enumerate(
-            buses[:25]
-        ):
-
-            keyboard.append([
-
-                InlineKeyboardButton(
-
-                    (
-                        f"{bus['operator']} "
-                        f"• ₹{bus['price']}"
-                    ),
-
-                    callback_data=f"bus|{index}"
-                )
-            ])
-
-        await query.message.reply_text(
-
-            f"🚌 {len(buses)} buses found\n"
-            f"📅 Date: {doj}",
-
-            reply_markup=InlineKeyboardMarkup(
-                keyboard
-            )
-        )
-
-    elif data.startswith("bus|"):
-
-        bus_index = int(
-            data.split("|")[1]
-        )
-
-        bus = USER_STATE[
-            chat_id
-        ]["buses"][bus_index]
-
-        monitor_name = (
-
-            f"{USER_STATE[chat_id]['monitor_name']} "
-
-            f"- "
-
-            f"{bus['operator']}"
-        )
-
-        add_monitor({
-
-            "monitor_name":
-                monitor_name,
-
-            "chat_id":
-                chat_id,
-
-            "source_id":
                 USER_STATE[chat_id][
                     "source_id"
                 ],
 
-            "destination_id":
                 USER_STATE[chat_id][
                     "destination_id"
                 ],
 
-            "date":
-                USER_STATE[chat_id][
-                    "date"
-                ],
+                doj
+            )
 
-            "bus_operator":
-                bus["operator"]
-        })
+            USER_STATE[chat_id][
+                "buses"
+            ] = buses
 
-        await query.message.reply_text(
+            if not buses:
 
-            f"✅ Monitor Created\n\n"
+                await query.message.reply_text(
+                    "❌ No buses found"
+                )
 
-            f"📋 {monitor_name}\n\n"
+                return
 
-            f"🚌 {bus['operator']}\n"
+            keyboard = []
 
-            f"💺 {bus['bus_type']}\n"
+            for index, bus in enumerate(
+                buses[:25]
+            ):
 
-            f"🕒 "
-            f"{format_time(bus['departure'])} "
-            f"→ "
-            f"{format_time(bus['arrival'])}\n"
+                keyboard.append([
 
-            f"⌛ "
-            f"{format_duration(bus['duration'])}\n"
+                    InlineKeyboardButton(
 
-            f"💰 ₹{bus['price']}\n"
+                        (
+                            f"{bus['operator']} "
+                            f"• ₹{bus['price']}"
+                        ),
 
-            f"⭐ {bus['rating']}\n"
+                        callback_data=f"bus|{index}"
+                    )
+                ])
 
-            f"💺 Seats: "
-            f"{bus['available_seats']}"
-        )
+            await query.message.reply_text(
+
+                f"🚌 {len(buses)} buses found\n"
+                f"📅 Date: {doj}",
+
+                reply_markup=InlineKeyboardMarkup(
+                    keyboard
+                )
+            )
+
+        elif data.startswith("bus|"):
+
+            bus_index = int(
+                data.split("|")[1]
+            )
+
+            bus = USER_STATE[
+                chat_id
+            ]["buses"][bus_index]
+
+            monitor_name = (
+
+                f"{USER_STATE[chat_id]['monitor_name']} "
+
+                f"- "
+
+                f"{bus['operator']}"
+            )
+
+            add_monitor({
+
+                "monitor_name":
+                    monitor_name,
+
+                "chat_id":
+                    chat_id,
+
+                "source_id":
+                    USER_STATE[chat_id][
+                        "source_id"
+                    ],
+
+                "destination_id":
+                    USER_STATE[chat_id][
+                        "destination_id"
+                    ],
+
+                "date":
+                    USER_STATE[chat_id][
+                        "date"
+                    ],
+
+                "bus_operator":
+                    bus["operator"]
+            })
+
+            await query.message.reply_text(
+
+                f"✅ Monitor Created\n\n"
+
+                f"📋 {monitor_name}\n\n"
+
+                f"🚌 {bus['operator']}\n"
+
+                f"💺 {bus['bus_type']}\n"
+
+                f"🕒 "
+                f"{format_time(bus['departure'])} "
+                f"→ "
+                f"{format_time(bus['arrival'])}\n"
+
+                f"⌛ "
+                f"{format_duration(bus['duration'])}\n"
+
+                f"💰 ₹{bus['price']}\n"
+
+                f"⭐ {bus['rating']}\n"
+
+                f"💺 Seats: "
+                f"{bus['available_seats']}"
+            )
+
+    except Exception as e:
+
+        print("\nCALLBACK ERROR:")
+        print(str(e))
+
+        try:
+
+            await update.effective_message.reply_text(
+
+                f"❌ Error:\n{str(e)}"
+            )
+
+        except:
+            pass
