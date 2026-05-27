@@ -1,0 +1,38 @@
+
+# MONITOR NAME UNIQUE FIX
+
+# FIND THIS:
+
+monitor_name=USER_STATE[chat_id]["monitor_name"],
+
+# REPLACE WITH:
+
+monitor_name=(
+    f"{USER_STATE[chat_id]['monitor_name']} "
+    f"- {bus['operator']}"
+),
+
+# RESULT:
+
+User enters:
+M1
+
+Selected bus:
+SK Balu Bus
+
+Stored monitor:
+M1 - SK Balu Bus
+
+Another selected bus:
+Royal Roadlinks
+
+Stored monitor:
+M1 - Royal Roadlinks
+
+# BENEFITS
+
+- Unique monitor names
+- Better Telegram UX
+- Easier monitor tracking
+- Supports multiple buses under one trip
+- Fully dynamic
