@@ -2,30 +2,20 @@ import os
 import logging
 
 from dotenv import load_dotenv
+
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
-    ConversationHandler,
     filters
 )
 
 from handlers.conversation import (
-    start,
-    source,
-    destination,
-    source_selected,
-    destination_selected,
-    date_selected,
-    bus_selected,
-    SOURCE,
-    DESTINATION,
-    DATE,
-    BUS
+    start_command,
+    message_handler,
+    callback_handler
 )
-
-from scheduler import start_scheduler
 
 logging.basicConfig(level=logging.INFO)
 
@@ -35,31 +25,28 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 app = Application.builder().token(BOT_TOKEN).build()
 
-conversation_handler = ConversationHandler(
-    entry_points=[CommandHandler("start", start)],
-    states={
-        SOURCE: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, source),
-            CallbackQueryHandler(source_selected, pattern=r"^source\|")
-        ],
-        DESTINATION: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, destination),
-            CallbackQueryHandler(destination_selected, pattern=r"^destination\|")
-        ],
-        DATE: [
-            CallbackQueryHandler(date_selected, pattern=r"^(today|tomorrow)$")
-        ],
-        BUS: [
-            CallbackQueryHandler(bus_selected, pattern=r"^bus\|")
-        ]
-    },
-    fallbacks=[]
+app.add_handler(
+    CommandHandler(
+        "start",
+        start_command
+    )
 )
 
-app.add_handler(conversation_handler)
+app.add_handler(
+    MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        message_handler
+    )
+)
 
-start_scheduler(app.bot)
+app.add_handler(
+    CallbackQueryHandler(
+        callback_handler
+    )
+)
 
 print("Bot started...")
 
-app.run_polling(drop_pending_updates=True, close_loop=False)
+app.run_polling(
+    drop_pending_updates=True
+)
