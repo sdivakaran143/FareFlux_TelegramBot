@@ -1,5 +1,41 @@
 import requests
 import json
+import time
+
+from requests.adapters import (
+    HTTPAdapter
+)
+
+from urllib3.util.retry import (
+    Retry
+)
+
+
+session = requests.Session()
+
+retry_strategy = Retry(
+
+    total=5,
+
+    backoff_factor=2,
+
+    status_forcelist=[
+        429,
+        500,
+        502,
+        503,
+        504
+    ]
+)
+
+adapter = HTTPAdapter(
+    max_retries=retry_strategy
+)
+
+session.mount(
+    "https://",
+    adapter
+)
 
 
 def scrape_prices(
@@ -185,12 +221,26 @@ curl "{url}" \\
 
     try:
 
-        response = requests.post(
+        start_time = time.time()
+
+        response = session.post(
+
             url,
+
             params=params,
+
             headers=headers,
+
             json=payload,
-            timeout=30
+
+            timeout=90
+        )
+
+        end_time = time.time()
+
+        print("\nRESPONSE TIME:")
+        print(
+            f"{end_time - start_time:.2f} seconds"
         )
 
         print("\n========================")
