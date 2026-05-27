@@ -1,0 +1,88 @@
+
+# PATCH FOR handlers/conversation.py
+
+# REPLACE:
+
+keyboard = []
+
+for index, bus in enumerate(buses[:25]):
+
+    keyboard.append([
+        InlineKeyboardButton(
+            f"{bus['operator']} • ₹{bus['price']}",
+            callback_data=f"bus|{index}"
+        )
+    ])
+
+await query.message.reply_text(
+    "🚌 Select Bus",
+    reply_markup=InlineKeyboardMarkup(keyboard)
+)
+
+# WITH:
+
+USER_STATE[chat_id]["step"] = "search_bus"
+
+await query.message.reply_text(
+    f"""
+✅ {len(buses)} buses found
+
+🔎 Enter bus keyword
+
+Examples:
+SK
+SRS
+KPN
+Parveen
+Balu
+"""
+)
+
+# ADD THIS INSIDE message_handler():
+
+elif step == "search_bus":
+
+    keyword = text.lower()
+
+    all_buses = USER_STATE[chat_id]["buses"]
+
+    filtered = []
+
+    for index, bus in enumerate(all_buses):
+
+        operator = str(
+            bus.get("operator", "")
+        ).lower()
+
+        if keyword in operator:
+
+            filtered.append(
+                (index, bus)
+            )
+
+    if not filtered:
+
+        await update.message.reply_text(
+            "❌ No matching buses found"
+        )
+
+        return
+
+    keyboard = []
+
+    for index, bus in filtered[:25]:
+
+        keyboard.append([
+            InlineKeyboardButton(
+                (
+                    f"{bus['operator']} "
+                    f"• ₹{bus['price']}"
+                ),
+                callback_data=f"bus|{index}"
+            )
+        ])
+
+    await update.message.reply_text(
+        f"🚌 Matching buses for: {text}",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
