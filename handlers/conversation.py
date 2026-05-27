@@ -9,7 +9,8 @@ from telegram.ext import (
 )
 
 from datetime import (
-    datetime
+    datetime,
+    timedelta
 )
 
 from services.scraper import (
@@ -191,87 +192,6 @@ async def message_handler(
             )
         )
 
-    elif step == "search_bus":
-
-        keyword = text.lower().strip()
-
-        all_buses = USER_STATE[
-            chat_id
-        ].get(
-            "filtered_buses",
-            USER_STATE[chat_id]["buses"]
-        )
-
-        filtered = []
-
-        for index, bus in enumerate(
-            all_buses
-        ):
-
-            operator = str(
-                bus.get("operator", "")
-            ).lower()
-
-            bus_type = str(
-                bus.get("bus_type", "")
-            ).lower()
-
-            combined = (
-                operator + " " + bus_type
-            )
-
-            if keyword in combined:
-
-                filtered.append(
-                    (index, bus)
-                )
-
-        if not filtered:
-
-            await update.message.reply_text(
-                "❌ No matching buses found"
-            )
-
-            return
-
-        keyboard = []
-
-        for index, bus in filtered[:25]:
-
-            keyboard.append([
-
-                InlineKeyboardButton(
-
-                    (
-                        f"🚌 {bus['operator']}\n"
-                        f"💺 {bus['bus_type']}\n"
-                        f"🕒 "
-                        f"{format_time(bus['departure'])} "
-                        f"→ "
-                        f"{format_time(bus['arrival'])}\n"
-                        f"⌛ "
-                        f"{format_duration(bus['duration'])}\n"
-                        f"💰 ₹{bus['price']} "
-                        f"(₹{bus['original_price']})\n"
-                        f"🎁 {bus['offer']}\n"
-                        f"⭐ {bus['rating']}\n"
-                        f"💺 Seats: "
-                        f"{bus['available_seats']}"
-                    ),
-
-                    callback_data=f"bus|{index}"
-                )
-            ])
-
-        await update.message.reply_text(
-
-            f"🔎 Matching buses for: {text}",
-
-            reply_markup=InlineKeyboardMarkup(
-                keyboard
-            )
-        )
-
 
 async def callback_handler(
     update: Update,
@@ -375,18 +295,156 @@ async def callback_handler(
             "buses"
         ] = buses
 
-        USER_STATE[chat_id][
-            "step"
-        ] = "search_bus"
+        keyboard = []
+
+        for index, bus in enumerate(
+            buses[:25]
+        ):
+
+            keyboard.append([
+
+                InlineKeyboardButton(
+
+                    (
+                        f"{bus['operator']} "
+                        f"• ₹{bus['price']}"
+                    ),
+
+                    callback_data=f"bus|{index}"
+                )
+            ])
+
+            keyboard.append([
+
+                InlineKeyboardButton(
+
+                    (
+                        f"💺 {bus['bus_type']} | "
+                        f"🕒 "
+                        f"{format_time(bus['departure'])}"
+                        f" → "
+                        f"{format_time(bus['arrival'])}"
+                    ),
+
+                    callback_data="ignore"
+                )
+            ])
+
+            keyboard.append([
+
+                InlineKeyboardButton(
+
+                    (
+                        f"⌛ "
+                        f"{format_duration(bus['duration'])} | "
+                        f"⭐ {bus['rating']} | "
+                        f"💺 Seats "
+                        f"{bus['available_seats']}"
+                    ),
+
+                    callback_data="ignore"
+                )
+            ])
 
         await query.message.reply_text(
 
-            f"✅ {len(buses)} buses found\n\n"
-            f"🔎 Enter Bus Keyword\n\n"
-            f"Examples:\n"
-            f"SK\n"
-            f"Sleeper\n"
-            f"AC"
+            f"🚌 {len(buses)} buses found",
+
+            reply_markup=InlineKeyboardMarkup(
+                keyboard
+            )
+        )
+
+    elif data == "tomorrow":
+
+        tomorrow = (
+            datetime.now()
+            + timedelta(days=1)
+        )
+
+        doj = tomorrow.strftime(
+            "%d-%b-%Y"
+        )
+
+        USER_STATE[chat_id][
+            "date"
+        ] = doj
+
+        buses = scrape_prices(
+
+            USER_STATE[chat_id][
+                "source_id"
+            ],
+
+            USER_STATE[chat_id][
+                "destination_id"
+            ],
+
+            doj
+        )
+
+        USER_STATE[chat_id][
+            "buses"
+        ] = buses
+
+        keyboard = []
+
+        for index, bus in enumerate(
+            buses[:25]
+        ):
+
+            keyboard.append([
+
+                InlineKeyboardButton(
+
+                    (
+                        f"{bus['operator']} "
+                        f"• ₹{bus['price']}"
+                    ),
+
+                    callback_data=f"bus|{index}"
+                )
+            ])
+
+            keyboard.append([
+
+                InlineKeyboardButton(
+
+                    (
+                        f"💺 {bus['bus_type']} | "
+                        f"🕒 "
+                        f"{format_time(bus['departure'])}"
+                        f" → "
+                        f"{format_time(bus['arrival'])}"
+                    ),
+
+                    callback_data="ignore"
+                )
+            ])
+
+            keyboard.append([
+
+                InlineKeyboardButton(
+
+                    (
+                        f"⌛ "
+                        f"{format_duration(bus['duration'])} | "
+                        f"⭐ {bus['rating']} | "
+                        f"💺 Seats "
+                        f"{bus['available_seats']}"
+                    ),
+
+                    callback_data="ignore"
+                )
+            ])
+
+        await query.message.reply_text(
+
+            f"🚌 {len(buses)} buses found",
+
+            reply_markup=InlineKeyboardMarkup(
+                keyboard
+            )
         )
 
     elif data.startswith("bus|"):
@@ -399,16 +457,19 @@ async def callback_handler(
             chat_id
         ]["buses"][bus_index]
 
+        monitor_name = (
+
+            f"{USER_STATE[chat_id]['monitor_name']} "
+
+            f"- "
+
+            f"{bus['operator']}"
+        )
+
         add_monitor({
 
-            "monitor_name": (
-
-                f"{USER_STATE[chat_id]['monitor_name']} "
-
-                f"- "
-
-                f"{bus['operator']}"
-            ),
+            "monitor_name":
+                monitor_name,
 
             "chat_id":
                 chat_id,
@@ -435,6 +496,8 @@ async def callback_handler(
         await query.message.reply_text(
 
             f"✅ Monitor Created\n\n"
+
+            f"📋 {monitor_name}\n\n"
 
             f"🚌 {bus['operator']}\n"
 
