@@ -1,12 +1,20 @@
-
-from apscheduler.schedulers.background import BackgroundScheduler
-
-from database import (
-    get_all_monitors,
-    update_price
+from apscheduler.schedulers.background import (
+    BackgroundScheduler
 )
 
-from services.scraper import scrape_prices
+import asyncio
+
+from services.scraper import (
+    scrape_prices
+)
+
+from storage import (
+    load_monitors,
+    save_monitors
+)
+
+
+LAST_PRICES = {}
 
 
 def start_scheduler(application):
@@ -25,57 +33,95 @@ def start_scheduler(application):
 
     def check_prices():
 
-        monitors = get_all_monitors()
+        print("\n====================")
+        print("CHECKING PRICES")
+        print("====================")
+
+        monitors = load_monitors()
 
         for monitor in monitors:
 
-            monitor_id = monitor[0]
-            chat_id = monitor[1]
-            operator = monitor[3]
-            travel_date = monitor[6]
-            old_price = monitor[7]
-            booking_link = monitor[8]
-            source_id = monitor[9]
-            destination_id = monitor[10]
+            try:
 
-            buses = scrape_prices(
-                source_id,
-                destination_id,
-                travel_date
-            )
+                buses = scrape_prices(
 
-            for bus in buses:
+                    monitor["source_id"],
 
-                if operator.lower() in bus["operator"].lower():
+                    monitor["destination_id"],
 
-                    new_price = bus["price"]
+                    monitor["date"]
+                )
 
-                    if new_price != old_price:
+                target_bus = None
 
-                        change_type = "📉 PRICE DROP" if new_price < old_price else "📈 PRICE HIKE"
+                for bus in buses:
 
-                        text = f'''
-{change_type}
+                    if (
+                        bus["operator"]
+                        ==
+                        monitor["bus_operator"]
+                    ):
 
-🚌 {operator}
+                        target_bus = bus
 
-Old Price: ₹{old_price}
-New Price: ₹{new_price}
+                        break
 
-🔗 {booking_link}
-'''
+                if not target_bus:
+                    continue
 
-                        application.create_task(
-                            send_alert(
-                                chat_id,
-                                text
-                            )
+                current_price = (
+                    target_bus["price"]
+                )
+
+                monitor_key = (
+                    monitor["monitor_name"]
+                )
+
+                old_price = LAST_PRICES.get(
+                    monitor_key
+                )
+
+                if old_price is None:
+
+                    LAST_PRICES[
+                        monitor_key
+                    ] = current_price
+
+                    continue
+
+                if current_price != old_price:
+
+                    direction = "⬆️ Increased"
+
+                    if current_price < old_price:
+                        direction = "⬇️ Dropped"
+
+                    message = (
+                        f"📢 Price Update\\n\\n"
+                        f"🚌 {target_bus['operator']}\\n"
+                        f"💰 Old: ₹{old_price}\\n"
+                        f"💰 New: ₹{current_price}\\n"
+                        f"{direction}"
+                    )
+
+                    asyncio.run(
+                        send_alert(
+                            monitor["chat_id"],
+                            message
                         )
+                    )
 
-                        update_price(
-                            monitor_id,
-                            new_price
-                        )
+                    LAST_PRICES[
+                        monitor_key
+                    ] = current_price
+
+            except Exception as e:
+
+                print(
+                    "SCHEDULER ERROR:"
+                )
+
+                print(str(e))
 
     scheduler.add_job(
         check_prices,
@@ -84,3 +130,7 @@ New Price: ₹{new_price}
     )
 
     scheduler.start()
+
+    print(
+        "Scheduler started"
+    )
