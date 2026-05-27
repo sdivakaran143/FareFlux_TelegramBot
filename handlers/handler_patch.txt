@@ -1,0 +1,17 @@
+
+# IMPORTANT PATCH
+
+# Replace:
+# formatted_date = travel_date.strftime("%Y-%m-%d")
+
+# With:
+# formatted_date = travel_date.strftime("%d-%b-%Y")
+
+# Add BEFORE scrape_prices():
+
+print("\nFETCHING BUSES")
+print("SOURCE:", USER_STATE[chat_id]["source"])
+print("SOURCE ID:", USER_STATE[chat_id]["source_id"])
+print("DESTINATION:", USER_STATE[chat_id]["destination"])
+print("DESTINATION ID:", USER_STATE[chat_id]["destination_id"])
+print("DATE:", formatted_date)
