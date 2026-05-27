@@ -33,36 +33,44 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 app = Application.builder().token(BOT_TOKEN).build()
 
 conversation_handler = ConversationHandler(
-    per_message=True,
     entry_points=[
         CommandHandler("start", start)
     ],
     states={
+
         SOURCE: [
+
             MessageHandler(
                 filters.TEXT & ~filters.COMMAND,
                 source
             ),
+
             CallbackQueryHandler(
                 source_selected,
                 pattern=r"^source\|"
             )
         ],
+
         DESTINATION: [
+
             MessageHandler(
                 filters.TEXT & ~filters.COMMAND,
                 destination
             ),
+
             CallbackQueryHandler(
                 destination_selected,
                 pattern=r"^destination\|"
             )
         ],
+
         DATE: [
+
             CallbackQueryHandler(
                 date_selected,
                 pattern=r"^(today|tomorrow)$"
             ),
+
             CallbackQueryHandler(
                 bus_selected,
                 pattern=r"^bus\|"
