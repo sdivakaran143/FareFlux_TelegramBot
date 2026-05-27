@@ -1,56 +1,110 @@
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
-
 from telegram import (
-    Update,
     InlineKeyboardButton,
-    InlineKeyboardMarkup
+    InlineKeyboardMarkup,
+    Update
 )
 
-from services.city_code_service import (
-    find_city_code,
-    save_city_code
+from telegram.ext import (
+    ContextTypes
 )
 
-from services.scraper import scrape_prices
+from datetime import (
+    datetime
+)
 
-from database import (
+from services.scraper import (
+    scrape_prices
+)
+
+from storage import (
     add_monitor,
-    get_monitors,
-    delete_monitor
+    load_monitors,
+    remove_monitor
 )
 
-IST = ZoneInfo("Asia/Kolkata")
 
 USER_STATE = {}
 
 
-async def start_command(update: Update, context):
+def format_time(value):
+
+    try:
+
+        value = str(value)
+
+        if "T" in value:
+
+            dt = datetime.fromisoformat(
+                value
+            )
+
+            return dt.strftime(
+                "%I:%M %p"
+            )
+
+        return value
+
+    except:
+
+        return str(value)
+
+
+def format_duration(minutes):
+
+    try:
+
+        minutes = int(minutes)
+
+        hours = minutes // 60
+
+        mins = minutes % 60
+
+        return f"{hours}h {mins}m"
+
+    except:
+
+        return str(minutes)
+
+
+async def start_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     keyboard = [
+
         [
             InlineKeyboardButton(
                 "➕ Create Monitor",
                 callback_data="create_monitor"
             )
         ],
+
         [
             InlineKeyboardButton(
-                "📋 My Monitors",
-                callback_data="my_monitors"
+                "📋 View Monitors",
+                callback_data="view_monitors"
             )
         ]
     ]
 
     await update.message.reply_text(
-        "🚌 DIVA'S FareFlux Bot",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+
+        "🔥 DIVA'S FareFlux Bot",
+
+        reply_markup=InlineKeyboardMarkup(
+            keyboard
+        )
     )
 
 
-async def message_handler(update: Update, context):
+async def message_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     chat_id = update.effective_chat.id
+
     text = update.message.text.strip()
 
     print("\nMESSAGE RECEIVED:")
@@ -59,14 +113,21 @@ async def message_handler(update: Update, context):
     if chat_id not in USER_STATE:
         return
 
-    step = USER_STATE[chat_id]["step"]
+    step = USER_STATE[chat_id].get(
+        "step"
+    )
 
     print("CURRENT STEP:", step)
 
     if step == "monitor_name":
 
-        USER_STATE[chat_id]["monitor_name"] = text
-        USER_STATE[chat_id]["step"] = "source"
+        USER_STATE[chat_id][
+            "monitor_name"
+        ] = text
+
+        USER_STATE[chat_id][
+            "step"
+        ] = "source"
 
         await update.message.reply_text(
             "📍 Enter Source"
@@ -74,112 +135,45 @@ async def message_handler(update: Update, context):
 
     elif step == "source":
 
-        city_code = find_city_code(text)
+        USER_STATE[chat_id][
+            "source_name"
+        ] = text
 
-        print("SOURCE CITY CODE:", city_code)
+        USER_STATE[chat_id][
+            "source_id"
+        ] = 89782
 
-        if city_code:
-
-            USER_STATE[chat_id]["source"] = text
-            USER_STATE[chat_id]["source_id"] = city_code
-            USER_STATE[chat_id]["step"] = "destination"
-
-            await update.message.reply_text(
-                "📍 Enter Destination"
-            )
-
-        else:
-
-            USER_STATE[chat_id]["pending_source"] = text
-            USER_STATE[chat_id]["step"] = "source_code"
-
-            await update.message.reply_text(
-                "❌ Source not found.\n\nEnter RedBus source city code."
-            )
-
-    elif step == "source_code":
-
-        source_code = int(text)
-
-        save_city_code(
-            USER_STATE[chat_id]["pending_source"],
-            source_code
-        )
-
-        USER_STATE[chat_id]["source"] = (
-            USER_STATE[chat_id]["pending_source"]
-        )
-
-        USER_STATE[chat_id]["source_id"] = source_code
-        USER_STATE[chat_id]["step"] = "destination"
+        USER_STATE[chat_id][
+            "step"
+        ] = "destination"
 
         await update.message.reply_text(
-            "✅ Source saved.\n\n📍 Enter Destination"
+            "📍 Enter Destination"
         )
 
     elif step == "destination":
 
-        city_code = find_city_code(text)
+        USER_STATE[chat_id][
+            "destination_name"
+        ] = text
 
-        print("DESTINATION CITY CODE:", city_code)
+        USER_STATE[chat_id][
+            "destination_id"
+        ] = 1042
 
-        if city_code:
-
-            USER_STATE[chat_id]["destination"] = text
-
-            USER_STATE[chat_id]["destination_id"] = city_code
-
-            keyboard = [
-                [
-                    InlineKeyboardButton(
-                        "Today",
-                        callback_data="today"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        "Tomorrow",
-                        callback_data="tomorrow"
-                    )
-                ]
-            ]
-
-            await update.message.reply_text(
-                "📅 Select Travel Date",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-
-        else:
-
-            USER_STATE[chat_id]["pending_destination"] = text
-            USER_STATE[chat_id]["step"] = "destination_code"
-
-            await update.message.reply_text(
-                "❌ Destination not found.\n\nEnter RedBus destination city code."
-            )
-
-    elif step == "destination_code":
-
-        destination_code = int(text)
-
-        save_city_code(
-            USER_STATE[chat_id]["pending_destination"],
-            destination_code
-        )
-
-        USER_STATE[chat_id]["destination"] = (
-            USER_STATE[chat_id]["pending_destination"]
-        )
-
-        USER_STATE[chat_id]["destination_id"] = destination_code
+        USER_STATE[chat_id][
+            "step"
+        ] = "date"
 
         keyboard = [
+
             [
                 InlineKeyboardButton(
                     "Today",
                     callback_data="today"
                 )
             ],
+
             [
                 InlineKeyboardButton(
                     "Tomorrow",
@@ -189,20 +183,108 @@ async def message_handler(update: Update, context):
         ]
 
         await update.message.reply_text(
-            "📅 Select Travel Date",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+
+            "📅 Select Date",
+
+            reply_markup=InlineKeyboardMarkup(
+                keyboard
+            )
+        )
+
+    elif step == "search_bus":
+
+        keyword = text.lower().strip()
+
+        all_buses = USER_STATE[
+            chat_id
+        ].get(
+            "filtered_buses",
+            USER_STATE[chat_id]["buses"]
+        )
+
+        filtered = []
+
+        for index, bus in enumerate(
+            all_buses
+        ):
+
+            operator = str(
+                bus.get("operator", "")
+            ).lower()
+
+            bus_type = str(
+                bus.get("bus_type", "")
+            ).lower()
+
+            combined = (
+                operator + " " + bus_type
+            )
+
+            if keyword in combined:
+
+                filtered.append(
+                    (index, bus)
+                )
+
+        if not filtered:
+
+            await update.message.reply_text(
+                "❌ No matching buses found"
+            )
+
+            return
+
+        keyboard = []
+
+        for index, bus in filtered[:25]:
+
+            keyboard.append([
+
+                InlineKeyboardButton(
+
+                    (
+                        f"🚌 {bus['operator']}\n"
+                        f"💺 {bus['bus_type']}\n"
+                        f"🕒 "
+                        f"{format_time(bus['departure'])} "
+                        f"→ "
+                        f"{format_time(bus['arrival'])}\n"
+                        f"⌛ "
+                        f"{format_duration(bus['duration'])}\n"
+                        f"💰 ₹{bus['price']} "
+                        f"(₹{bus['original_price']})\n"
+                        f"🎁 {bus['offer']}\n"
+                        f"⭐ {bus['rating']}\n"
+                        f"💺 Seats: "
+                        f"{bus['available_seats']}"
+                    ),
+
+                    callback_data=f"bus|{index}"
+                )
+            ])
+
+        await update.message.reply_text(
+
+            f"🔎 Matching buses for: {text}",
+
+            reply_markup=InlineKeyboardMarkup(
+                keyboard
+            )
         )
 
 
-async def callback_handler(update: Update, context):
+async def callback_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
     query = update.callback_query
 
-    if not query:
-        return
+    await query.answer()
 
     data = query.data
-    chat_id = query.message.chat_id
+
+    chat_id = update.effective_chat.id
 
     print("\nCALLBACK DATA:")
     print(data)
@@ -210,6 +292,7 @@ async def callback_handler(update: Update, context):
     if data == "create_monitor":
 
         USER_STATE[chat_id] = {
+
             "step": "monitor_name"
         }
 
@@ -217,197 +300,214 @@ async def callback_handler(update: Update, context):
             "📝 Enter Monitor Name"
         )
 
-    elif data == "my_monitors":
+    elif data == "view_monitors":
 
-        monitors = get_monitors(chat_id)
+        monitors = load_monitors()
 
-        if not monitors:
+        user_monitors = [
+
+            monitor
+
+            for monitor in monitors
+
+            if monitor["chat_id"] == chat_id
+        ]
+
+        if not user_monitors:
 
             await query.message.reply_text(
-                "No monitors found"
+                "❌ No monitors found"
             )
 
             return
 
         keyboard = []
 
-        for monitor in monitors:
+        for monitor in user_monitors:
 
             keyboard.append([
+
                 InlineKeyboardButton(
-                    monitor[2],
-                    callback_data=f"view|{monitor[0]}"
+
+                    monitor["monitor_name"],
+
+                    callback_data=
+                    f"monitor|"
+                    f"{monitor['monitor_name']}"
                 )
             ])
 
         await query.message.reply_text(
+
             "📋 Your Monitors",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
 
-    elif data in ["today", "tomorrow"]:
-
-        current_time = datetime.now(IST)
-
-        print("\nCURRENT IST TIME:")
-        print(current_time)
-
-        if data == "today":
-
-            travel_date = current_time
-
-        else:
-
-            travel_date = (
-                current_time + timedelta(days=1)
+            reply_markup=InlineKeyboardMarkup(
+                keyboard
             )
-
-        formatted_date = (
-            travel_date.strftime("%d-%b-%Y")
         )
 
-        print("\nGENERATED DOJ:")
-        print(formatted_date)
+    elif data == "today":
 
-        USER_STATE[chat_id]["date"] = formatted_date
+        today = datetime.now()
 
-        await query.message.reply_text(
-            "🔍 Fetching buses..."
+        doj = today.strftime(
+            "%d-%b-%Y"
         )
 
-        print("\nFETCHING BUSES")
-        print("SOURCE:", USER_STATE[chat_id]["source"])
-        print("SOURCE ID:", USER_STATE[chat_id]["source_id"])
-        print("DESTINATION:", USER_STATE[chat_id]["destination"])
-        print("DESTINATION ID:", USER_STATE[chat_id]["destination_id"])
-        print("DATE:", formatted_date)
+        USER_STATE[chat_id][
+            "date"
+        ] = doj
 
         buses = scrape_prices(
-            USER_STATE[chat_id]["source_id"],
-            USER_STATE[chat_id]["destination_id"],
-            formatted_date
+
+            USER_STATE[chat_id][
+                "source_id"
+            ],
+
+            USER_STATE[chat_id][
+                "destination_id"
+            ],
+
+            doj
         )
 
-        if not buses:
+        USER_STATE[chat_id][
+            "buses"
+        ] = buses
 
-            await query.message.reply_text(
-                "❌ No buses found"
-            )
-
-            return
-
-        USER_STATE[chat_id]["buses"] = buses
-
-        keyboard = []
-
-        for index, bus in enumerate(buses[:25]):
-
-            operator = bus.get(
-                "operator",
-                "Unknown"
-            )
-
-            price = bus.get(
-                "price",
-                0
-            )
-
-            keyboard.append([
-                InlineKeyboardButton(
-                    f"{operator} • ₹{price}",
-                    callback_data=f"bus|{index}"
-                )
-            ])
+        USER_STATE[chat_id][
+            "step"
+        ] = "search_bus"
 
         await query.message.reply_text(
-            "🚌 Select Bus",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+
+            f"✅ {len(buses)} buses found\n\n"
+            f"🔎 Enter Bus Keyword\n\n"
+            f"Examples:\n"
+            f"SK\n"
+            f"Sleeper\n"
+            f"AC"
         )
 
     elif data.startswith("bus|"):
 
-        index = int(data.split("|")[1])
-
-        bus = USER_STATE[chat_id]["buses"][index]
-
-        add_monitor(
-            chat_id=chat_id,
-            monitor_name=USER_STATE[chat_id]["monitor_name"],
-            operator=bus["operator"],
-            source=USER_STATE[chat_id]["source"],
-            destination=USER_STATE[chat_id]["destination"],
-            travel_date=USER_STATE[chat_id]["date"],
-            current_price=bus["price"],
-            booking_link=bus["booking_link"],
-            source_id=USER_STATE[chat_id]["source_id"],
-            destination_id=USER_STATE[chat_id]["destination_id"]
+        bus_index = int(
+            data.split("|")[1]
         )
+
+        bus = USER_STATE[
+            chat_id
+        ]["buses"][bus_index]
+
+        add_monitor({
+
+            "monitor_name": (
+
+                f"{USER_STATE[chat_id]['monitor_name']} "
+
+                f"- "
+
+                f"{bus['operator']}"
+            ),
+
+            "chat_id":
+                chat_id,
+
+            "source_id":
+                USER_STATE[chat_id][
+                    "source_id"
+                ],
+
+            "destination_id":
+                USER_STATE[chat_id][
+                    "destination_id"
+                ],
+
+            "date":
+                USER_STATE[chat_id][
+                    "date"
+                ],
+
+            "bus_operator":
+                bus["operator"]
+        })
 
         await query.message.reply_text(
-            f'''
-✅ Monitor Created
 
-📝 {USER_STATE[chat_id]["monitor_name"]}
+            f"✅ Monitor Created\n\n"
 
-🚌 {bus["operator"]}
+            f"🚌 {bus['operator']}\n"
 
-💰 Current Price:
-₹{bus["price"]}
+            f"💺 {bus['bus_type']}\n"
 
-You will receive:
-📉 Price Drop Alerts
-📈 Price Hike Alerts
-'''
+            f"🕒 "
+            f"{format_time(bus['departure'])} "
+            f"→ "
+            f"{format_time(bus['arrival'])}\n"
+
+            f"⌛ "
+            f"{format_duration(bus['duration'])}\n"
+
+            f"💰 ₹{bus['price']} "
+            f"(₹{bus['original_price']})\n"
+
+            f"🎁 {bus['offer']}\n"
+
+            f"⭐ {bus['rating']}\n"
+
+            f"💺 Seats: "
+            f"{bus['available_seats']}"
         )
 
-    elif data.startswith("view|"):
+    elif data.startswith("monitor|"):
 
-        monitor_id = int(data.split("|")[1])
+        monitor_name = data.split("|")[1]
 
-        monitors = get_monitors(chat_id)
+        monitors = load_monitors()
 
-        selected = None
+        target = None
 
         for monitor in monitors:
 
-            if monitor[0] == monitor_id:
-                selected = monitor
+            if (
+                monitor["monitor_name"]
+                == monitor_name
+            ):
 
-        if not selected:
+                target = monitor
+
+                break
+
+        if not target:
             return
 
         keyboard = [
+
             [
                 InlineKeyboardButton(
                     "❌ Remove Monitor",
-                    callback_data=f"delete|{monitor_id}"
+                    callback_data=
+                    f"remove|{monitor_name}"
                 )
             ]
         ]
 
         await query.message.reply_text(
-            f'''
-📋 Monitor Status
 
-📝 {selected[2]}
+            f"📋 {monitor_name}",
 
-🚌 {selected[3]}
-
-📍 {selected[4]} → {selected[5]}
-
-💰 Current Price:
-₹{selected[7]}
-
-🔗 {selected[8]}
-''',
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(
+                keyboard
+            )
         )
 
-    elif data.startswith("delete|"):
+    elif data.startswith("remove|"):
 
-        monitor_id = int(data.split("|")[1])
+        monitor_name = data.split("|")[1]
 
-        delete_monitor(monitor_id)
+        remove_monitor(
+            monitor_name
+        )
 
         await query.message.reply_text(
             "✅ Monitor Removed"
