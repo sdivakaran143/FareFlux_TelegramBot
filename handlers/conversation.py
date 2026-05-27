@@ -33,15 +33,30 @@ def format_time(value):
 
         value = str(value)
 
-        if "T" in value:
+        if ":" in value:
 
-            dt = datetime.fromisoformat(
-                value
-            )
+            parts = value.split(":")
 
-            return dt.strftime(
-                "%I:%M %p"
-            )
+            if len(parts) >= 2:
+
+                hour = int(parts[0])
+                minute = int(parts[1])
+
+                suffix = "AM"
+
+                if hour >= 12:
+                    suffix = "PM"
+
+                if hour > 12:
+                    hour -= 12
+
+                if hour == 0:
+                    hour = 12
+
+                return (
+                    f"{hour:02d}:{minute:02d} "
+                    f"{suffix}"
+                )
 
         return value
 
@@ -235,9 +250,7 @@ async def callback_handler(
             doj
         )
 
-        USER_STATE[chat_id][
-            "buses"
-        ] = buses
+        USER_STATE[chat_id]["buses"] = buses
 
         keyboard = []
 
@@ -294,9 +307,7 @@ async def callback_handler(
             doj
         )
 
-        USER_STATE[chat_id][
-            "buses"
-        ] = buses
+        USER_STATE[chat_id]["buses"] = buses
 
         keyboard = []
 
@@ -333,16 +344,11 @@ async def callback_handler(
             data.split("|")[1]
         )
 
-        bus = USER_STATE[
-            chat_id
-        ]["buses"][bus_index]
+        bus = USER_STATE[chat_id]["buses"][bus_index]
 
         monitor_name = (
-
             f"{USER_STATE[chat_id]['monitor_name']} "
-
             f"- "
-
             f"{bus['operator']}"
         )
 
@@ -355,19 +361,13 @@ async def callback_handler(
                 chat_id,
 
             "source_id":
-                USER_STATE[chat_id][
-                    "source_id"
-                ],
+                USER_STATE[chat_id]["source_id"],
 
             "destination_id":
-                USER_STATE[chat_id][
-                    "destination_id"
-                ],
+                USER_STATE[chat_id]["destination_id"],
 
             "date":
-                USER_STATE[chat_id][
-                    "date"
-                ],
+                USER_STATE[chat_id]["date"],
 
             "bus_operator":
                 bus["operator"]
@@ -380,21 +380,15 @@ async def callback_handler(
             f"📋 {monitor_name}\n\n"
 
             f"🚌 {bus['operator']}\n"
-
             f"💺 {bus['bus_type']}\n"
-
             f"🕒 "
             f"{format_time(bus['departure'])} "
             f"→ "
             f"{format_time(bus['arrival'])}\n"
-
             f"⌛ "
             f"{format_duration(bus['duration'])}\n"
-
             f"💰 ₹{bus['price']}\n"
-
             f"⭐ {bus['rating']}\n"
-
             f"💺 Seats: "
             f"{bus['available_seats']}"
         )
