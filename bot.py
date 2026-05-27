@@ -1,4 +1,5 @@
 import os
+
 from dotenv import load_dotenv
 
 from telegram.ext import (
@@ -41,7 +42,7 @@ app.add_handler(
     )
 )
 
-print("FareFlux Bot Started")
+print("FareFlux Started")
 
 app.run_polling(
     drop_pending_updates=True,

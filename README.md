@@ -1,19 +1,14 @@
-# FareFlux RedBus Live Final
+# FareFlux Final
 
-## Features
-- Real RedBus location search
-- Real RedBus live buses
-- Real fares
-- Real booking links
-- Create monitor
+Features:
+- Real RedBus live bus search
+- Local city-code storage
+- No RedBus autocomplete dependency
+- Monitor creation
 - View monitor
 - Remove monitor
 - Railway ready
 
-## Deploy
-
-Add BOT_TOKEN in Railway variables.
-
-Start bot:
-
-python bot.py
+Initial city codes:
+- karapakkam → 89782
+- paramathi velur → 697
