@@ -1,4 +1,5 @@
 import os
+import logging
 
 from dotenv import load_dotenv
 
@@ -26,6 +27,10 @@ from handlers.conversation import (
 
 from scheduler import start_scheduler
 
+logging.getLogger(
+    "telegram.ext.ConversationHandler"
+).setLevel(logging.ERROR)
+
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -33,9 +38,11 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 app = Application.builder().token(BOT_TOKEN).build()
 
 conversation_handler = ConversationHandler(
+
     entry_points=[
         CommandHandler("start", start)
     ],
+
     states={
 
         SOURCE: [
@@ -77,6 +84,7 @@ conversation_handler = ConversationHandler(
             )
         ]
     },
+
     fallbacks=[]
 )
 
