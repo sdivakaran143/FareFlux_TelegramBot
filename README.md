@@ -1,19 +1,19 @@
+# FareFlux RedBus Live Final
 
-# FareFlux Pro Final
-
-Features:
-- Smart source suggestions
-- Smart destination suggestions
-- Today/Tomorrow buttons
-- List all buses
-- Create named monitors
-- View monitor status
+## Features
+- Real RedBus location search
+- Real RedBus live buses
+- Real fares
+- Real booking links
+- Create monitor
+- View monitor
 - Remove monitor
-- Instant fare drop alerts
-- RedBus/AbhiBus links
 - Railway ready
 
-Deploy:
-1. Upload to GitHub
-2. Deploy on Railway
-3. Add BOT_TOKEN variable
+## Deploy
+
+Add BOT_TOKEN in Railway variables.
+
+Start bot:
+
+python bot.py

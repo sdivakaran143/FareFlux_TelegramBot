@@ -1,5 +1,4 @@
 import os
-
 from dotenv import load_dotenv
 
 from telegram.ext import (
@@ -20,24 +19,7 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-print("TOKEN LOADED:", BOT_TOKEN[:10])
-
 app = Application.builder().token(BOT_TOKEN).build()
-
-
-async def ping(update, context):
-
-    await update.message.reply_text(
-        "pong"
-    )
-
-
-app.add_handler(
-    CommandHandler(
-        "ping",
-        ping
-    )
-)
 
 app.add_handler(
     CommandHandler(
@@ -59,13 +41,10 @@ app.add_handler(
     )
 )
 
-print("Bot started...")
+print("FareFlux Bot Started")
 
 app.run_polling(
     drop_pending_updates=True,
-    allowed_updates=[
-        "message",
-        "callback_query"
-    ],
+    allowed_updates=["message", "callback_query"],
     poll_interval=2
 )

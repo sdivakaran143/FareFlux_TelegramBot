@@ -1,7 +1,10 @@
-
 import sqlite3
 
-conn = sqlite3.connect("monitors.db", check_same_thread=False)
+conn = sqlite3.connect(
+    "monitors.db",
+    check_same_thread=False
+)
+
 cursor = conn.cursor()
 
 cursor.execute(
@@ -21,6 +24,7 @@ cursor.execute(
 )
 
 conn.commit()
+
 
 def add_monitor(
     chat_id,
@@ -61,6 +65,7 @@ def add_monitor(
 
     conn.commit()
 
+
 def get_monitors(chat_id):
 
     cursor.execute(
@@ -69,6 +74,7 @@ def get_monitors(chat_id):
     )
 
     return cursor.fetchall()
+
 
 def delete_monitor(monitor_id):
 

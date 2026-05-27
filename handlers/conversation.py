@@ -1,7 +1,15 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
+
 from telegram.ext import ContextTypes
 
-from services.location_service import search_place
+from services.redbus_locations import (
+    search_redbus_locations
+)
+
 from services.scraper import scrape_prices
 
 from database import (
@@ -13,7 +21,7 @@ from database import (
 USER_STATE = {}
 
 
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_command(update: Update, context):
 
     keyboard = [
         [
@@ -31,15 +39,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        "🚌 FareFlux Pro",
+        "🚌 FareFlux RedBus Live",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
-async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def message_handler(update: Update, context):
 
     chat_id = update.effective_chat.id
-
     text = update.message.text
 
     if chat_id not in USER_STATE:
@@ -58,7 +65,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif step == "source":
 
-        results = search_place(text)
+        results = search_redbus_locations(text)
 
         USER_STATE[chat_id]["source_results"] = results
 
@@ -80,7 +87,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif step == "destination":
 
-        results = search_place(text)
+        results = search_redbus_locations(text)
 
         USER_STATE[chat_id]["destination_results"] = results
 
@@ -101,14 +108,13 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
-async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def callback_handler(update: Update, context):
 
     query = update.callback_query
 
     await query.answer()
 
     chat_id = query.message.chat_id
-
     data = query.data
 
     if data == "create_monitor":
@@ -153,9 +159,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         index = int(data.split("|")[1])
 
-        source = USER_STATE[chat_id]["source_results"][index]["name"]
+        selected = USER_STATE[chat_id]["source_results"][index]
 
-        USER_STATE[chat_id]["source"] = source
+        USER_STATE[chat_id]["source"] = selected["name"]
+        USER_STATE[chat_id]["source_id"] = selected["id"]
         USER_STATE[chat_id]["step"] = "destination"
 
         await query.message.reply_text(
@@ -166,9 +173,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         index = int(data.split("|")[1])
 
-        destination = USER_STATE[chat_id]["destination_results"][index]["name"]
+        selected = USER_STATE[chat_id]["destination_results"][index]
 
-        USER_STATE[chat_id]["destination"] = destination
+        USER_STATE[chat_id]["destination"] = selected["name"]
+        USER_STATE[chat_id]["destination_id"] = selected["id"]
 
         keyboard = [
             [
@@ -186,29 +194,29 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
 
         await query.message.reply_text(
-            "📅 Select Date",
+            "📅 Select Travel Date",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
     elif data in ["today", "tomorrow"]:
 
-        USER_STATE[chat_id]["date"] = data
+        USER_STATE[chat_id]["date"] = "2026-05-28"
 
         buses = scrape_prices(
-            USER_STATE[chat_id]["source"],
-            USER_STATE[chat_id]["destination"],
-            data
+            USER_STATE[chat_id]["source_id"],
+            USER_STATE[chat_id]["destination_id"],
+            USER_STATE[chat_id]["date"]
         )
 
         USER_STATE[chat_id]["buses"] = buses
 
         keyboard = []
 
-        for index, bus in enumerate(buses):
+        for index, bus in enumerate(buses[:25]):
 
             keyboard.append([
                 InlineKeyboardButton(
-                    f"{bus['operator']} • ₹{bus['price']} • {bus['website']}",
+                    f"{bus['operator']} • ₹{bus['price']}",
                     callback_data=f"bus|{index}"
                 )
             ])
@@ -232,11 +240,11 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             destination=USER_STATE[chat_id]["destination"],
             travel_date=USER_STATE[chat_id]["date"],
             current_price=bus["price"],
-            booking_link=bus["link"]
+            booking_link=bus["booking_link"]
         )
 
         await query.message.reply_text(
-            f"""
+            f'''
 ✅ Monitor Created
 
 📝 Name:
@@ -248,12 +256,12 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💰 Price:
 ₹{bus["price"]}
 
-🌐 Website:
-{bus["website"]}
+💺 Seats:
+{bus["available_seats"]}
 
-🔗 Link:
-{bus["link"]}
-"""
+🔗 Booking:
+{bus["booking_link"]}
+'''
         )
 
     elif data.startswith("view|"):
@@ -282,7 +290,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
 
         await query.message.reply_text(
-            f"""
+            f'''
 📋 Monitor Status
 
 📝 Name:
@@ -299,7 +307,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🔗 Booking:
 {selected[8]}
-""",
+''',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
